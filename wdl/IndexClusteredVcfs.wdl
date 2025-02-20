@@ -5,6 +5,7 @@ workflow IndexClusteredVcfs {
   input {
     File? clustered_depth_vcf
     File? clustered_manta_vcf
+    File? clustered_melt_vcf
     File? clustered_scramble_vcf
     File? clustered_wham_vcf
     File indexvcf_cmd_script
@@ -24,6 +25,15 @@ workflow IndexClusteredVcfs {
     call IndexVcf as index_manta_vcf {
       input:
         vcf = select_first([clustered_manta_vcf]),
+        cmd_script = indexvcf_cmd_script,
+        runtime_docker = runtime_docker
+    }
+  }
+
+  if (defined(clustered_melt_vcf)) {
+    call IndexVcf as index_melt_vcf {
+      input:
+        vcf = select_first([clustered_melt_vcf]),
         cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
@@ -50,6 +60,7 @@ workflow IndexClusteredVcfs {
   output {
     File? clustered_depth_vcf_index = index_depth_vcf.vcf_index
     File? clustered_manta_vcf_index = index_manta_vcf.vcf_index
+    File? clustered_melt_vcf_index = index_melt_vcf.vcf_index
     File? clustered_wham_vcf_index = index_wham_vcf.vcf_index
     File? clustered_scramble_vcf_index = index_scramble_vcf.vcf_index
   }

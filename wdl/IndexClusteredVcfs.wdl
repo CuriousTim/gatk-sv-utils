@@ -14,7 +14,7 @@ workflow IndexClusteredVcfs {
   if (defined(clustered_depth_vcf)) {
     call IndexVcf as index_depth_vcf {
       input:
-        vcf = select_first([clustered_depth_vcf, ""]),
+        vcf = select_first([clustered_depth_vcf]),
         cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
@@ -23,7 +23,7 @@ workflow IndexClusteredVcfs {
   if (defined(clustered_manta_vcf)) {
     call IndexVcf as index_manta_vcf {
       input:
-        vcf = select_first([clustered_manta_vcf, ""]),
+        vcf = select_first([clustered_manta_vcf]),
         cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
@@ -32,7 +32,7 @@ workflow IndexClusteredVcfs {
   if (defined(clustered_wham_vcf)) {
     call IndexVcf as index_wham_vcf {
       input:
-        vcf = select_first([clustered_wham_vcf, ""]),
+        vcf = select_first([clustered_wham_vcf]),
         cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
@@ -41,7 +41,7 @@ workflow IndexClusteredVcfs {
   if (defined(clustered_scramble_vcf)) {
     call IndexVcf as index_scramble_vcf {
       input:
-        vcf = select_first([clustered_scramble_vcf, ""]),
+        vcf = select_first([clustered_scramble_vcf]),
         cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }

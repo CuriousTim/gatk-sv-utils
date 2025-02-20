@@ -79,4 +79,10 @@ task IndexVcf {
   output {
     File vcf_index = vcf + ".tbi"
   }
+
+  meta {
+    author: "Justin Lim"
+    email: "jlim21@mgh.harvard.edu"
+    description: "Index a VCF using tabix."
+  }
 }

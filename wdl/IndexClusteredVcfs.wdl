@@ -84,7 +84,7 @@ task IndexVcf {
     set -o nounset
     set -o pipefail
 
-    vcf="$1"
+    vcf='~{vcf}'
     vcf_bn="$(basename "${vcf}")"
 
     # The index file will be placed in the current directory so that it will be

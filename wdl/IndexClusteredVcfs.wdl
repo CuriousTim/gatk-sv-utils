@@ -8,7 +8,6 @@ workflow IndexClusteredVcfs {
     File? clustered_melt_vcf
     File? clustered_scramble_vcf
     File? clustered_wham_vcf
-    File indexvcf_cmd_script
     String runtime_docker
   }
 
@@ -16,7 +15,6 @@ workflow IndexClusteredVcfs {
     call IndexVcf as index_depth_vcf {
       input:
         vcf = select_first([clustered_depth_vcf]),
-        cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
   }
@@ -25,7 +23,6 @@ workflow IndexClusteredVcfs {
     call IndexVcf as index_manta_vcf {
       input:
         vcf = select_first([clustered_manta_vcf]),
-        cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
   }
@@ -34,7 +31,6 @@ workflow IndexClusteredVcfs {
     call IndexVcf as index_melt_vcf {
       input:
         vcf = select_first([clustered_melt_vcf]),
-        cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
   }
@@ -43,7 +39,6 @@ workflow IndexClusteredVcfs {
     call IndexVcf as index_wham_vcf {
       input:
         vcf = select_first([clustered_wham_vcf]),
-        cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
   }
@@ -52,7 +47,6 @@ workflow IndexClusteredVcfs {
     call IndexVcf as index_scramble_vcf {
       input:
         vcf = select_first([clustered_scramble_vcf]),
-        cmd_script = indexvcf_cmd_script,
         runtime_docker = runtime_docker
     }
   }
@@ -69,7 +63,6 @@ workflow IndexClusteredVcfs {
 task IndexVcf {
   input {
     File vcf
-    File cmd_script
     String runtime_docker
   }
 
@@ -84,7 +77,16 @@ task IndexVcf {
   }
 
   command <<<
-    bash '~{cmd_script}' '~{vcf}'
+    # Usage: IndexVcf.bash <VCF>
+    # Index a VCF using tabix
+
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    printf 'indexing %s\n' '~{vcf}' >&2
+    tabix '~{vcf}'
+    printf 'done\n' >&2
   >>>
 
   output {

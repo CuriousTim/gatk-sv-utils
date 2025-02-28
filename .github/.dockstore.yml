@@ -8,3 +8,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: SplitVcfByContig
+    subclass: WDL
+    primaryDescriptorPath: /wdl/SplitVcfByContig.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

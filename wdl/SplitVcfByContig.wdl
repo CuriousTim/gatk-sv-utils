@@ -44,7 +44,7 @@ task GetContigFromVcf {
       Int? boot_disk_gb
     }
 
-    Float input_size = size([vcf, vcf_index], "GB")
+    Float input_size = size([vcf, vcf_index], "GB") * 1.2
     String output_vcf = "${contig}-${basename(vcf)}"
     String output_vcf_index = "${output_vcf}.tbi"
 

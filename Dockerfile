@@ -9,6 +9,7 @@ RUN apt-get update \
 		ca-certificates \
 		bzip2 \
 		xz-utils \
+		build-essential \
 		zlib1g-dev \
 		libbz2-dev \
 		liblzma-dev \

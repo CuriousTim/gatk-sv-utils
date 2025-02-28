@@ -6,6 +6,12 @@ ARG BCFTOOLS_URI="https://github.com/samtools/bcftools/releases/download/${BCFTO
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		curl \
+		ca-certificates \
+		zlib1g-dev \
+		libbz2-dev \
+		liblzma-dev \
+		libcurl4-gnutls-dev \
+		libssl-dev \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \

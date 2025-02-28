@@ -7,6 +7,8 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		curl \
 		ca-certificates \
+		bzip2 \
+		xz-utils \
 		zlib1g-dev \
 		libbz2-dev \
 		liblzma-dev \

@@ -26,6 +26,7 @@ RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \
   && cd .. \
   && rm -fr "bcftools-${BCFTOOLS_VERSION}" bcftools.tar.bz2
 
-COPY task-scripts /opt/
+RUN mkdir /opt/task-scripts
+COPY task-scripts /opt/task-scripts
 
 CMD ["bash"]

@@ -1,16 +1,16 @@
 docker_name := gatk-sv-utils
 commit_sha := $(shell git rev-parse --short HEAD)
-ifneq (.SHELLSTATUS, 0)
+ifneq ($(.SHELLSTATUS), 0)
 $(error failed to get git commit hash)
 endif
 
 date := $(shell date --utc +%Y%m%d)
-ifneq (.SHELLSTATUS, 0)
+ifneq ($(.SHELLSTATUS), 0)
 $(error failed to get date)
 endif
 
 branch := $(shell git rev-parse --abbrev-ref HEAD)
-ifneq (.SHELLSTATUS, 0)
+ifneq ($(.SHELLSTATUS), 0)
 $(error failed to get git branch)
 endif
 

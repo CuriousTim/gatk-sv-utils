@@ -16,3 +16,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: AddEnd2ToVcf
+    subclass: WDL
+    primaryDescriptorPath: /wdl/AddEnd2ToVcf.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

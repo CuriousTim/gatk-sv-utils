@@ -33,11 +33,13 @@ RUN curl -L -o htslib.tar.bz2 "${HTSLIB_URI}" \
   && cd .. \
   && rm -rf "htslib-${HTSLIB_VERSION}" htslib.tar.bz2
 
+RUN ldconfig
+
 RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \
   && tar -jxf bcftools.tar.bz2 \
   && cd "bcftools-${BCFTOOLS_VERSION}" \
   && ./configure --prefix=/usr/local \
-       --with-htslib=system \
+       --with-htslib=/usr/local \
   && make \
   && make install \
   && cd .. \

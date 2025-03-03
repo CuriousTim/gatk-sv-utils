@@ -48,7 +48,7 @@ task AddEnd2 {
   }
 
   command <<<
-    bash /opt/task-scripts/AddEnd2AndChr2ToVcf/AddEnd2AndChr2.bash '~{vcf}' '~{output_vcf}'
+    bash /opt/task-scripts/AddEnd2ToVcf/AddEnd2.bash '~{vcf}' '~{output_vcf}'
   >>>
 
   output {

@@ -23,6 +23,7 @@ RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \
   && ./configure --prefix=/usr/local \
   && make \
   && make install \
+  && cp "bcftools-${BCFTOOLS_VERSION}/htslib"*/{bgzip,tabix} /usr/local/bin \
   && cd .. \
   && rm -fr "bcftools-${BCFTOOLS_VERSION}" bcftools.tar.bz2
 

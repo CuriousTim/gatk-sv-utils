@@ -12,10 +12,9 @@ contigs="$4"
 
 if [[ $(wc -l "${samples}" | awk '{print $1}') -eq 0 ]]; then
   cp "${in_vcf}" "${out_vcf}"
-  exit 0
+else
+  bgzip -cd "${in_vcf}" \
+    gawk -f /opt/task-scripts/utils/set_gt_null.awk "${contigs}" "${samples}" - \
+    bgzip -c > "${out_vcf}"
 fi
-
-bgzip -cd "${in_vcf}" \
-  gawk -f /opt/task-scripts/utils/set_gt_null.awk "${contigs}" "${samples}" - \
-  bgzip -c > "${out_vcf}"
 bcftools index --tbi "${out_vcf}"

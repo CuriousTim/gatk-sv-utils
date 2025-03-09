@@ -24,3 +24,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: SetGenotypesNull
+    subclass: WDL
+    primaryDescriptorPath: /wdl/SetGenotypesNull.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

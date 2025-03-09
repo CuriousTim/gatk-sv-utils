@@ -19,6 +19,7 @@ RUN apt-get update \
 		libcurl4-gnutls-dev \
 		libssl-dev \
 		libdeflate-dev \
+                gawk \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl -L -o htslib.tar.bz2 "${HTSLIB_URI}" \

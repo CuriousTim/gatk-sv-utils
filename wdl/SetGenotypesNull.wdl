@@ -43,7 +43,7 @@ task SetGenotypesNullTask {
     Int? boot_disk_gb
   }
 
-  Float disk_size = size(vcf, "GB") * 2.2 + size(samples_list, "GB")
+  Float disk_size = size(vcf, "GB") * 2.2 + size(samples_list, "GB") + 16
   String output_vcf = "nulled-${basename(vcf)}"
   String output_vcf_index = "${output_vcf}.tbi"
   Array[String] contigs_set = select_first([contigs, []])

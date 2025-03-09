@@ -44,13 +44,13 @@ task GetContigFromVcf {
       Int? boot_disk_gb
     }
 
-    Float input_size = size([vcf, vcf_index], "GB") * 1.2
+    Float disk_size = size([vcf, vcf_index], "GB") * 1.2 + 16
     String output_vcf = "${contig}-${basename(vcf)}"
     String output_vcf_index = "${output_vcf}.tbi"
 
     runtime {
       memory: "${select_first([memory_gib, 2])} GiB"
-      disks: "local-disk ${select_first([disk_gb, ceil(input_size)])} HDD"
+      disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
       cpus: select_first([cpus, 1])
       preemptible: select_first([preemptible_tries, 3])
       docker: runtime_docker

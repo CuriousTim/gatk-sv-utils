@@ -64,16 +64,24 @@ task IndexVcf {
   input {
     File vcf
     String runtime_docker
+
+    Float? memory_gib
+    Int? disk_gb
+    Int? cpus
+    Int? preemptible_tries
+    Int? max_retries
+    Int? boot_disk_gb
   }
 
+  Float disk_size = size(vcf, "GB") + 16
+
   runtime {
-    memory: "1 GiB"
-    disks: "local-disk " + ceil(size(vcf, "GB")) + " HDD"
-    cpus: 1
-    preemptible: 3
-    maxRetries: 1
+    memory: "${select_first([memory_gib, 2])} GiB"
+    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
+    cpus: select_first([cpus, 1])
+    preemptible: select_first([preemptible_tries, 3])
     docker: runtime_docker
-    bootDiskSizeGb: 16
+    bootDiskSizeGb: select_first([boot_disk_gb, 16])
   }
 
   command <<<

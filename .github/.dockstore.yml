@@ -32,3 +32,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: MoveVcfFiltersToInfo
+    subclass: WDL
+    primaryDescriptorPath: /wdl/MoveVcfFiltersToInfo.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

@@ -8,15 +8,20 @@ workflow MoveVcfFiltersToInfo {
     # Either the same length as `vcfs` or length 1.
     # This is mostly to accomodate the case where the VCFs are split / named by
     # contig and the output should be named by contig as well.
-    Array[String]+ output_prefixes
+    # One of `output_prefix_list` or `output_prefix_file` must be given.
+    # `output_prefix_list` overrides `output_prefix_file`.
+    Array[String]? output_prefix_list
+    File? output_prefix_file
     String runtime_docker
   }
+
+  Array[String] output_prefix = select_first([output_prefix_list, read_lines(select_first([output_prefix_file]))])
 
   scatter (i in range(length(vcfs))) {
     call MoveVcfFilters {
       input:
         vcf = vcfs[i],
-        output_prefix = if (length(output_prefixes) == 1) then output_prefixes[0] else output_prefixes[i],
+        output_prefix = if (length(output_prefix) == 1) then output_prefix[0] else output_prefix[i],
         runtime_docker = runtime_docker
     }
   }

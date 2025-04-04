@@ -16,12 +16,13 @@ endif
 
 docker_tag := $(if $(DOCKER_REPO),$(DOCKER_REPO)/)$(docker_name):$(date)-$(branch)-$(commit_sha)
 
-.PHONY : docker_build docker_push all
+.PHONY: all
+all: ;
 
-all : ;
-
-docker_build :
+.PHONY: docker-build
+docker-build:
 	docker build -t $(docker_tag) .
 
-docker_push :
+.PHONY: docker-push
+docker-push:
 	docker push $(docker_tag)

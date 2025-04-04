@@ -1,16 +1,16 @@
 version 1.0
 
-# Add END2 field to BND and CTX variants in VCF
+# Add END2 to BND and CTX variants in VCF
 workflow AddEnd2ToVcf {
   input {
     Array[File] vcfs
     String runtime_docker
   }
 
-  scatter (f in vcfs) {
+  scatter (vcf in vcfs) {
     call AddEnd2 {
       input:
-        vcf = f,
+        vcf = vcf,
         runtime_docker = runtime_docker
     }
   }
@@ -27,11 +27,11 @@ task AddEnd2 {
     String runtime_docker
 
     Float? memory_gib
-    Int? disk_gb
-    Int? cpus
-    Int? preemptible_tries
-    Int? max_retries
     Int? boot_disk_gb
+    Int? cpus
+    Int? disk_gb
+    Int? max_retries
+    Int? preemptible_tries
   }
 
   Float disk_size = size(vcf, "GB") * 2.2 + 16
@@ -39,16 +39,17 @@ task AddEnd2 {
   String output_vcf_index = "${output_vcf}.tbi"
 
   runtime {
-    memory: "${select_first([memory_gib, 2])} GiB"
-    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
-    cpus: select_first([cpus, 1])
-    preemptible: select_first([preemptible_tries, 3])
-    docker: runtime_docker
     bootDiskSizeGb: select_first([boot_disk_gb, 16])
+    cpus: select_first([cpus, 1])
+    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
+    docker: runtime_docker
+    maxRetries: select_first([max_retries, 1])
+    memory: "${select_first([memory_gib, 2])} GiB"
+    preemptible: select_first([preemptible_tries, 3])
   }
 
   command <<<
-    bash /opt/task-scripts/AddEnd2ToVcf/AddEnd2.bash '~{vcf}' '~{output_vcf}'
+    /opt/task_scripts/AddEnd2ToVcf/AddEnd2 '~{vcf}' '~{output_vcf}'
   >>>
 
   output {

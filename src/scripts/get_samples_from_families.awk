@@ -1,4 +1,3 @@
-# SubsetVcfWithSamples.GetSamplesFromFamilies.awk
 # usage: gawk -f <script> [--families <families> | --nfamilies <n>]
 #                         <pedigree>
 #

@@ -1,5 +1,9 @@
+#!/usr/bin/env bash
+
 # AddEnd2ToVcf.AddEnd2
-# Args: <VCF> <OUTPUT_VCF>
+# Add END2 to the INFO field of intrachromosomal BND and CTX records in a VCF.
+#
+# Args: <vcf> <output_vcf>
 
 set -o errexit
 set -o nounset
@@ -10,6 +14,6 @@ out_vcf="$2"
 
 # faster to skip bcftools parsing
 bgzip -cd "${in_vcf}" \
-  | awk -f /opt/task-scripts/utils/add_end2_to_vcf.awk - \
+  | gawk -f /opt/gatk-sv-utils/scripts/add_end2_to_vcf.awk - \
   | bgzip -c > "${out_vcf}"
 bcftools index --tbi "${out_vcf}"

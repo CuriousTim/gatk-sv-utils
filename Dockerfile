@@ -46,8 +46,11 @@ RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \
   && cd .. \
   && rm -rf "bcftools-${BCFTOOLS_VERSION}" bcftools.tar.bz2
 
-RUN mkdir /opt/task-scripts
-COPY task-scripts /opt/task-scripts
+RUN mkdir /opt/task_scripts
+COPY --chmod=755 task_scripts /opt/task_scripts
+
+RUN mkdir /opt/gatk-sv-utils/scripts
+COPY src/scripts /opt/gatk-sv-utils/scripts
 
 ENV AWKPATH='.:/usr/local/share/awk/pongo'
 RUN mkdir -p /usr/local/share/awk/pongo

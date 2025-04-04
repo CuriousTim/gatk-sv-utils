@@ -49,16 +49,17 @@ task GetContigFromVcf {
     String output_vcf_index = "${output_vcf}.tbi"
 
     runtime {
-      memory: "${select_first([memory_gib, 2])} GiB"
-      disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
-      cpus: select_first([cpus, 1])
-      preemptible: select_first([preemptible_tries, 3])
-      docker: runtime_docker
       bootDiskSizeGb: select_first([boot_disk_gb, 16])
+      cpus: select_first([cpus, 1])
+      disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
+      docker: runtime_docker
+      maxRetries: select_first([max_retries, 1])
+      memory: "${select_first([memory_gib, 2])} GiB"
+      preemptible: select_first([preemptible_tries, 3])
     }
 
     command <<<
-      bash /opt/task-scripts/SplitVcfByContig/GetContigFromVcf.bash '~{vcf}' '~{contig}' '~{output_vcf}'
+       /opt/task_scripts/SplitVcfByContig/GetContigFromVcf '~{vcf}' '~{contig}' '~{output_vcf}'
     >>>
 
     output {

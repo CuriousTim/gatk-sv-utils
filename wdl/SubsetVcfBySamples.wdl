@@ -58,6 +58,11 @@ workflow SubsetVcfBySamples {
         runtime_docker = runtime_docker
     }
   }
+
+  output {
+    Array[File] subset_vcfs = SubsetVcf.subset_vcf
+    Array[File] subset_vcf_indicies = SubsetVcf.subset_vcf_index
+  }
 }
 
 task GetSamplesFromFamilies {
@@ -88,7 +93,7 @@ task GetSamplesFromFamilies {
   }
 
   command <<<
-    gawk -E /opt/task-scripts/SubsetVcfBySamples/GetSamplesFromFamilies.awk \
+    /opt/task_scripts/SubsetVcfBySamples/GetSamplesFromFamilies \
       ~{if defined(families) then "--families '" + families + "'" else "--nfamilies " + nfamilies} \
       '~{pedigree}' > "samples.list"
   >>>
@@ -132,7 +137,7 @@ task SubsetVcf {
   File output_vcf_index = "${output_vcf}.tbi"
 
   command <<<
-    gawk -E /opt/task-scripts/SubsetVcfBySamples/SubsetVcf.awk \
+    /opt/task-scripts/SubsetVcfBySamples/SubsetVcf \
       ~{if defined(samples) then "--samples '" + samples + "'" else "--nsamples " + nsamples} \
       ~{if remove_private_sites then "" else "--keep-private-sites"} \
       ~{if keep_af then "" else "--update-af"} \

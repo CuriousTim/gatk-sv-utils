@@ -49,16 +49,17 @@ task SetGenotypesNullTask {
   Array[String] contigs_set = select_first([contigs, []])
 
   runtime {
-    memory: "${select_first([memory_gib, 2])} GiB"
-    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
-    cpus: select_first([cpus, 1])
-    preemptible: select_first([preemptible_tries, 3])
-    docker: runtime_docker
     bootDiskSizeGb: select_first([boot_disk_gb, 16])
+    cpus: select_first([cpus, 1])
+    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
+    docker: runtime_docker
+    maxRetries: select_first([max_retries, 1])
+    memory: "${select_first([memory_gib, 2])} GiB"
+    preemptible: select_first([preemptible_tries, 3])
   }
 
   command <<<
-    bash /opt/task-scripts/SetGenotypesNull/SetGenotypesNullTask.bash '~{vcf}' \
+     /opt/task-scripts/SetGenotypesNull/SetGenotypesNullTask '~{vcf}' \
       '~{output_vcf}' '~{samples_list}' '~{write_lines(contigs_set)}'
   >>>
 

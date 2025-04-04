@@ -1,4 +1,3 @@
-# SubsetVcfWithSamples.SubsetVcf
 # usage: gawk -f <script> [--samples <samples> | --nsamples <n>]
 #                         [--keep-private-sites] [--update-af]
 #                         <vcf> <outfile>

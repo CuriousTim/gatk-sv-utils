@@ -76,31 +76,17 @@ task IndexVcf {
   Float disk_size = size(vcf, "GB") + 16
 
   runtime {
-    memory: "${select_first([memory_gib, 2])} GiB"
-    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
-    cpus: select_first([cpus, 1])
-    preemptible: select_first([preemptible_tries, 3])
-    docker: runtime_docker
     bootDiskSizeGb: select_first([boot_disk_gb, 16])
+    cpus: select_first([cpus, 1])
+    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
+    docker: runtime_docker
+    maxRetries: select_first([max_retries, 1])
+    memory: "${select_first([memory_gib, 2])} GiB"
+    preemptible: select_first([preemptible_tries, 3])
   }
 
   command <<<
-    # Usage: IndexVcf.bash <VCF>
-    # Index a VCF using tabix
-
-    set -o errexit
-    set -o nounset
-    set -o pipefail
-
-    vcf='~{vcf}'
-    vcf_bn="$(basename "${vcf}")"
-
-    # The index file will be placed in the current directory so that it will be
-    # delocalized to the top level task output directory.
-    printf 'indexing %s\n' "${vcf}" >&2
-    tabix "${vcf}"
-    mv "${vcf}.tbi" "${vcf_bn}.tbi"
-    printf 'done\n' >&2
+    /opt/task_scripts/IndexClusteredVcfs/IndexVcf '~{vcf}'
   >>>
 
   output {

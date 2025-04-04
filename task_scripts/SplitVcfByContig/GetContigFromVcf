@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+# SplitVcfByContig.GetContigFromVcf
+# Subset a VCF to a single contig and index it.
+#
+# Args: <vcf> <contig> <output_vcf>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+in_vcf="$1"
+contig="$2"
+out_vcf="$3"
+
+{ bcftools index --stats "${in_vcf}" | grep -F "^${contig}\$" - } \
+  || { printf '%s not in vcf\n' "${contig}" >&2 && exit 1; }
+trap 'rm -f "${tmpfile}"' EXIT
+tmpfile="$(mktemp -p "${PWD}")"
+bcftools head "${in_vcf}" \
+  | gawk '/^##contig=/{match($0, /<ID=([^,>]+)/, a); if (RSTART && t == a[1]){print} next} 1' t="${contig}" - > "${tmpfile}"
+bcftools view --output-type u --regions "${contig}" "${in_vcf}" \
+  | bcftools reheader --header "${tmpfile}" - \
+  | bcftools view --output-type z --output "${out_vcf}" -
+bcftools index --tbi "${out_vcf}"

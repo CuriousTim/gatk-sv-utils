@@ -59,7 +59,7 @@ task SetGenotypesNullTask {
   }
 
   command <<<
-     /opt/task-scripts/SetGenotypesNull/SetGenotypesNullTask '~{vcf}' \
+     /opt/task_scripts/SetGenotypesNull/SetGenotypesNullTask '~{vcf}' \
       '~{output_vcf}' '~{samples_list}' '~{write_lines(contigs_set)}'
   >>>
 

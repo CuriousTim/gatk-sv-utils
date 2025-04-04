@@ -137,7 +137,7 @@ task SubsetVcf {
   File output_vcf_index = "${output_vcf}.tbi"
 
   command <<<
-    /opt/task-scripts/SubsetVcfBySamples/SubsetVcf \
+    /opt/task_scripts/SubsetVcfBySamples/SubsetVcf \
       ~{if defined(samples) then "--samples '" + samples + "'" else "--nsamples " + nsamples} \
       ~{if remove_private_sites then "" else "--keep-private-sites"} \
       ~{if keep_af then "" else "--update-af"} \

@@ -50,7 +50,7 @@ workflow SubsetVcfBySamples {
     call SubsetVcf {
       input:
         vcf = vcfs[i],
-        samples = samples,
+        samples = if defined(GetSamplesFromFamilies.samples) then GetSamplesFromFamilies.samples else samples,
         nsamples = nsamples,
         remove_private_sites = remove_private_sites,
         keep_af = keep_af,

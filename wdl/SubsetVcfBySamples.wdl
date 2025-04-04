@@ -133,8 +133,8 @@ task SubsetVcf {
     preemptible: select_first([preemptible_tries, 3])
   }
 
-  File output_vcf = "${output_prefix}-subset.vcf.gz"
-  File output_vcf_index = "${output_vcf}.tbi"
+  String output_vcf = "${output_prefix}-subset.vcf.gz"
+  String output_vcf_index = "${output_vcf}.tbi"
 
   command <<<
     /opt/task_scripts/SubsetVcfBySamples/SubsetVcf \

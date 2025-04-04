@@ -49,7 +49,7 @@ RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \
 RUN mkdir /opt/task_scripts
 COPY --chmod=755 task_scripts /opt/task_scripts
 
-RUN mkdir /opt/gatk-sv-utils/scripts
+RUN mkdir -p /opt/gatk-sv-utils/scripts
 COPY src/scripts /opt/gatk-sv-utils/scripts
 
 ENV AWKPATH='.:/usr/local/share/awk/pongo'

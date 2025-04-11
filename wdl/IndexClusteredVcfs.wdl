@@ -76,7 +76,7 @@ task IndexVcf {
   Float disk_size = size(vcf, "GB") + 16
 
   runtime {
-    bootDiskSizeGb: select_first([boot_disk_gb, 16])
+    bootDiskSizeGb: select_first([boot_disk_gb, 8])
     cpus: select_first([cpus, 1])
     disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
     docker: runtime_docker

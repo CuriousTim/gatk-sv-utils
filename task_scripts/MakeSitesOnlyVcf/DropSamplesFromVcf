@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# MakeSitesOnlyVcf.DropSamplesFromVcf
+# Drop all sample-level information from a VCF
+#
+# Args: <vcf> <output_vcf>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+in_vcf="$1"
+out_vcf="$2"
+
+bcftools view --drop-genotypes --output-type z --output "${out_vcf}" \
+  --write-index=tbi --no-update "${in_vcf}"

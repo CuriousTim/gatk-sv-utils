@@ -48,3 +48,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: MakeSitesOnlyVcf
+    subclass: WDL
+    primaryDescriptorPath: /wdl/MakeSitesOnlyVcf.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

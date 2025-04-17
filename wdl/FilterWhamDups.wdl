@@ -58,7 +58,7 @@ task FilterSites {
   }
 
   command <<<
-    /opt/task_scripts/FilterWhamDups/FlagSites '~{vcf}' \
+    /opt/task_scripts/FilterWhamDups/FilterSites '~{vcf}' \
       '~{blacklist}' '~{output_vcf}' \
       '~{if defined(extra_filters) then extra_filters else ""}'
   >>>

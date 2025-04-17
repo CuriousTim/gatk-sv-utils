@@ -32,7 +32,7 @@ task FilterSites {
   input {
     File vcf
     File blacklist
-    String extra_filters = '(EVIDENCE == "SR" || EVIDENCE == "RD,SR")'
+    String extra_filters = '(EVIDENCE == "SR" || EVIDENCE ~ "^RD,SR$")'
     String runtime_docker
 
     Float? memory_gib

@@ -24,9 +24,9 @@ cat2() {
 }
 
 vcf_sites="$(mktemp -p "${PWD}" tmp.XXXXXXXXX)"
-bcftools view --include 'SVTYPE=="DUP" && ALGORITHM=="wham"' --output-type u "${in_vcf}" \
-  | bcftools query "${extra_filters:---include}" "${extra_filters:-extra_filters}" \
-      --format '%CHROM\t%POS0\t%INFO/END\t%ID\n' "${in_vcf}" \
+bcftools view --include 'SVTYPE=="DUP" && ALGORITHMS=="wham"' --output-type u "${in_vcf}" \
+  | bcftools query "${extra_filters:+--include}" "${extra_filters:+extra_filters}" \
+      --format '%CHROM\t%POS0\t%INFO/END\t%ID\n' \
   | LC_ALL=C sort -k1,1 -k2,2n > "${vcf_sites}"
 
 bl_sorted="$(mktemp -p "${PWD}" tmp.XXXXXXXXX)"

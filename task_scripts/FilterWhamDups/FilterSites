@@ -29,7 +29,7 @@ bcftools view --include 'SVTYPE=="DUP" && ALGORITHMS=="wham"' --output-type u "$
       --format '%CHROM\t%POS0\t%INFO/END\t%ID\n' \
   | LC_ALL=C sort -k1,1 -k2,2n > "${vcf_sites}"
 read -r wham_only_count _ < <(wc -l "${vcf_sites}")
-printf '%d Wham-only calls passing initial filters\n' "${wham_only_count}" >&2
+printf '%d Wham-only DUPs passing initial filters\n' "${wham_only_count}" >&2
 
 bl_sorted="$(mktemp -p "${PWD}" tmp.XXXXXXXXX)"
 cat2 "${blacklist}" | LC_ALL=C sort -k1,1 -k2,2n > "${bl_sorted}"
@@ -42,9 +42,9 @@ bedtools intersect -a "${bl_sorted}" -b "${vcf_sites}" -wb -F 0.5 -sorted \
 trap 'rm -f "${vcf_sites}" "${bl_sorted}" "${bad_sites}"' EXIT
 read -r bad_sites_count _ < <(wc -l "${bad_sites}")
 if (( bad_sites_count > 0 )); then
-  printf 'removing %d Wham-only calls overlapping blacklist regions\n' "${bad_sites_count}" >&2
+  printf 'removing %d Wham-only DUPs overlapping blacklist regions\n' "${bad_sites_count}" >&2
 else
-  printf 'no Wham-only calls overlapping blacklist regions with 0.5 coverage of SV\n' >&2
+  printf 'no Wham-only DUPs overlapping blacklist regions with >=0.5 coverage of SV\n' >&2
   cp "${in_vcf}" "${out_vcf}"
   if [[ ! -f "${out_vcf}.tbi" ]]; then
     bcftools index --tbi "${out_vcf}"

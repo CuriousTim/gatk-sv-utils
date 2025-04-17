@@ -56,3 +56,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: FilterWhamDups
+    subclass: WDL
+    primaryDescriptorPath: /wdl/FilterWhamDups.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

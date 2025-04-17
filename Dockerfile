@@ -6,6 +6,9 @@ ARG BCFTOOLS_URI="https://github.com/samtools/bcftools/releases/download/${BCFTO
 ARG HTSLIB_VERSION="1.21"
 ARG HTSLIB_URI="https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2"
 
+ARG BEDTOOLS_VERSION="2.31.1"
+ARG BEDTOOLS_URI="https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz"
+
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		curl \
@@ -45,6 +48,14 @@ RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \
   && make install \
   && cd .. \
   && rm -rf "bcftools-${BCFTOOLS_VERSION}" bcftools.tar.bz2
+
+RUN curl -L -o bedtools.tar.gz "${BEDTOOLS_URI}" \
+  && tar -zxf bedtools.tar.gz \
+  && cd "bedtools-${BEDTOOLS_VERSION}" \
+  && make prefix=/usr/local \
+  && make install \
+  && cd .. \
+  && rm -rf "bedtools-${BEDTOOLS_VERSION}" bedtools.tar.gz
 
 RUN mkdir /opt/task_scripts
 COPY --chmod=755 task_scripts /opt/task_scripts

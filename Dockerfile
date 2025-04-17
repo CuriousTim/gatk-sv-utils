@@ -51,7 +51,7 @@ RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \
 
 RUN curl -L -o bedtools.tar.gz "${BEDTOOLS_URI}" \
   && tar -zxf bedtools.tar.gz \
-  && cd "bedtools-${BEDTOOLS_VERSION}" \
+  && cd bedtools2 \
   && make prefix=/usr/local \
   && make install \
   && cd .. \

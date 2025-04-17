@@ -30,7 +30,7 @@ bcftools view --include 'SVTYPE=="DUP" && ALGORITHMS=="wham"' --output-type u "$
   | LC_ALL=C sort -k1,1 -k2,2n > "${vcf_sites}"
 
 bl_sorted="$(mktemp -p "${PWD}" tmp.XXXXXXXXX)"
-cat2 "${blacklist}" | LC_ALL=C sort -k1,1, -k2,2n > "${bl_sorted}"
+cat2 "${blacklist}" | LC_ALL=C sort -k1,1 -k2,2n > "${bl_sorted}"
 
 bad_sites="$(mktemp -p "${PWD}" tmp.XXXXXXXXX)"
 bedtools intersect -a "${bl_sorted}" -b "${vcf_sites}" -wb -F 0.5 -sorted \

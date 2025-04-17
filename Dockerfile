@@ -23,6 +23,7 @@ RUN apt-get update \
 		libssl-dev \
 		libdeflate-dev \
                 gawk \
+                python3-minimal \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN curl -L -o htslib.tar.bz2 "${HTSLIB_URI}" \

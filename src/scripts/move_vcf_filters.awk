@@ -5,7 +5,7 @@
 #
 # This script can only process text so if the VCF is compressed, it must be
 # piped as uncompressed e.g.
-# bcftools view --output-type v | gawk -f add_end2_to_vcf.awk -
+# bcftools view --output-type v | gawk -f move_vcf_filters.awk -
 # The updated VCF will be written to stdout.
 
 @include "logging"

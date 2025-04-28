@@ -28,6 +28,7 @@ RUN apt-get update \
     unzip \
     xz-utils \
     zlib1g-dev \
+    zstd \
   && rm -rf /var/lib/apt/lists/*
 
 RUN curl -L -o htslib.tar.bz2 "${HTSLIB_URI}" \

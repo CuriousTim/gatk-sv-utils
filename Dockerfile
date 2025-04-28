@@ -13,29 +13,30 @@ ARG DUCKDB_VERSION="1.2.2"
 ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
 
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends \
-		curl \
-		ca-certificates \
-		bzip2 \
-		xz-utils \
-		build-essential \
-		zlib1g-dev \
-		libbz2-dev \
-		liblzma-dev \
-		libcurl4-gnutls-dev \
-		libssl-dev \
-		libdeflate-dev \
-                gawk \
-                python3-minimal \
-	&& rm -rf /var/lib/apt/lists/*
+  && apt-get install -y --no-install-recommends \
+    build-essential \
+    bzip2 \
+    ca-certificates \
+    curl \
+    gawk \
+    libbz2-dev \
+    libcurl4-gnutls-dev \
+    libdeflate-dev \
+    liblzma-dev \
+    libssl-dev \
+    python3-minimal \
+    unzip \
+    xz-utils \
+    zlib1g-dev \
+  && rm -rf /var/lib/apt/lists/*
 
 RUN curl -L -o htslib.tar.bz2 "${HTSLIB_URI}" \
   && tar -jxf htslib.tar.bz2 \
   && cd "htslib-${HTSLIB_VERSION}" \
   && ./configure --prefix=/usr/local \
-       --enable-libcurl \
-       --enable-gcs \
-       --with-libdeflate \
+    --enable-libcurl \
+    --enable-gcs \
+    --with-libdeflate \
   && make \
   && make install \
   && cd .. \
@@ -47,7 +48,7 @@ RUN curl -L -o bcftools.tar.bz2 "${BCFTOOLS_URI}" \
   && tar -jxf bcftools.tar.bz2 \
   && cd "bcftools-${BCFTOOLS_VERSION}" \
   && ./configure --prefix=/usr/local \
-       --with-htslib=/usr/local \
+    --with-htslib=/usr/local \
   && make \
   && make install \
   && cd .. \

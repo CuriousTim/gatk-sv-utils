@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# EstimateDeNovoRate.GatherGenotypes
+# Gather genotypes from a VCF into a DuckDB database.
+#
+# Args: <vcf> <filter> <trios> <output_db>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+in_vcf="$1"
+filter="$2"
+output="$3"
+
+bcftools query --include "${filter}" \
+  --format '[%SAMPLE\t%ID\t%INFO/SVTYPE\t%GT\t%GQ\n]' "${in_vcf}" \
+  | gawk -i logging \
+      'BEGIN{FS="\t"; OFS="\t"}
+       $4 == "0/0" {$4 = 0; print; next}
+       $4 == "1/0" || $4 == "0/1" {$4 = 1; print; next}
+       $4 == "1/1" {$4 = 2; print; next}
+       $4 == "./." {$4 = "NA"; print; next}
+       {logging::log_err("unknown genotype in record: " $0); exit 1}' \
+  | zstd -c > genotypes.tsv.zst
+
+duckdb "${output}" <<EOF
+CREATE TABLE genotypes (sample VARCHAR, vid VARCHAR, svtype VARCHAR, gt UINTEGER);
+COPY genotypes FROM 'genotypes.tsv.zst' (DELIM '\t', NULLSTR 'NA');
+EOF

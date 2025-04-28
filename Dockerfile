@@ -9,6 +9,9 @@ ARG HTSLIB_URI="https://github.com/samtools/htslib/releases/download/${HTSLIB_VE
 ARG BEDTOOLS_VERSION="2.31.1"
 ARG BEDTOOLS_URI="https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz"
 
+ARG DUCKDB_VERSION="1.2.2"
+ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
+
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		curl \
@@ -57,6 +60,10 @@ RUN curl -L -o bedtools.tar.gz "${BEDTOOLS_URI}" \
   && make install \
   && cd .. \
   && rm -rf "bedtools-${BEDTOOLS_VERSION}" bedtools.tar.gz
+
+RUN curl -L -o duckdb_cli-linux-amd64.zip "${DUCKDB_URI}" \
+  && unzip duckdb_cli-linux-amd64.zip -d /usr/local/bin \
+  && rm duckdb_cli-linux-amd64.zip
 
 RUN mkdir /opt/task_scripts
 COPY --chmod=755 task_scripts /opt/task_scripts

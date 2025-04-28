@@ -64,3 +64,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: EstimateDeNovoRate
+    subclass: WDL
+    primaryDescriptorPath: /wdl/EstimateDeNovoRate.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

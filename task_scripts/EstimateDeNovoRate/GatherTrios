@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+# EstimateDeNovoRate.GatherTrios
+# Extract trios from a pedigree.
+#
+# Args: <pedigree> <output>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+pedigree="$1"
+output="$2"
+
+trios="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
+trap 'rm -f "${trios}"' EXIT
+
+# Missing parents are usually represented as a 0-length string or the literal
+# 0, both of which are treated as false by awk.
+gawk '!/^#/ && $2 && $3 && $4 {print $2"\t"$3"\t"$4}' "${pedigree}" > "${trios}"
+
+read -r trio_n _ < <(wc -l "${trios}")
+if (( trio_n == 0 )); then
+  printf 'no trios found\n' >&2
+  exit 1
+else
+  printf 'found %d trios\n' "${trio_n}" >&2
+fi
+
+sort -u -k 1,1 "${trios}" > "${output}"
+read -r uniq_trio_n _ < <(wc -l "${output}")
+if (( uniq_trio_n != trio_n )); then
+  printf 'warning: trios (%d) does not equal unique trios (%d)\n' "${trio_n}" "${uniq_trio_n}" >&2
+fi

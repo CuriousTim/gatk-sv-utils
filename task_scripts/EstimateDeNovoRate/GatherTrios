@@ -17,7 +17,7 @@ trap 'rm -f "${trios}"' EXIT
 
 # Missing parents are usually represented as a 0-length string or the literal
 # 0, both of which are treated as false by awk.
-gawk '!/^#/ && $2 && $3 && $4 {print $2"\t"$3"\t"$4}' "${pedigree}" > "${trios}"
+gawk -F'\t' '!/^#/ && $2 && $3 && $4 {print $2"\t"$3"\t"$4}' "${pedigree}" > "${trios}"
 
 read -r trio_n _ < <(wc -l "${trios}")
 if (( trio_n == 0 )); then

@@ -3,7 +3,7 @@
 # EstimateDeNovoRate.GatherGenotypes
 # Gather genotypes from a VCF into a compressed TSV.
 #
-# Args: <vcf> <filter> <trios> <output>
+# Args: <vcf> <filter> <output>
 
 set -o errexit
 set -o nounset

@@ -29,7 +29,7 @@ workflow EstimateDeNovoRate {
 
   output {
     File trios = GatherTrios.trios_output
-    Array[File] genotypes = GatherGenotypes.genotypes_db
+    Array[File] genotypes = GatherGenotypes.genotypes_tsv
   }
 }
 
@@ -84,15 +84,15 @@ task GatherGenotypes {
 
   # Need space for the intermediate compressed genotypes file and the DuckDB file.
   Float disk_size = size(vcf, "GB") * 4 + 16
-  String genotypes = basename(vcf, ".vcf.gz") + "-genotypes.duckdb"
+  String genotypes = basename(vcf, ".vcf.gz") + "-genotypes.tsv.zst"
 
   runtime {
     bootDiskSizeGb: select_first([boot_disk_gb, 8])
-    cpus: select_first([cpus, 2])
-    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} SSD"
+    cpus: select_first([cpus, 1])
+    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
     docker: runtime_docker
     maxRetries: select_first([max_retries, 1])
-    memory: "${select_first([memory_gib, 4])} GiB"
+    memory: "${select_first([memory_gib, 2])} GiB"
     preemptible: select_first([preemptible_tries, 3])
   }
 
@@ -101,6 +101,6 @@ task GatherGenotypes {
   >>>
 
   output {
-    File genotypes_db = genotypes
+    File genotypes_tsv = genotypes
   }
 }

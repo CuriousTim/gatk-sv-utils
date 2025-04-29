@@ -74,8 +74,8 @@ task SplitVcfSamples {
   }
 
   command <<<
-    /opt/task_scripts/GatherGenotypes/SplitVcfSamples '${vcf}' \
-      '${genotypes_per_shard}' 'shards'
+    /opt/task_scripts/GatherGenotypes/SplitVcfSamples '~{vcf}' \
+      '~{genotypes_per_shard}' 'shards'
   >>>
 
   output {
@@ -113,8 +113,8 @@ task GatherGenotypesForSamples {
   }
 
   command <<<
-    /opt/task_scripts/GatherGenotypes/GatherGenotypesForSamples '${vcf}' \
-      '${vcf_include_filter}' '${samples}' '${output_file}'
+    /opt/task_scripts/GatherGenotypes/GatherGenotypesForSamples '~{vcf}' \
+      '~{vcf_include_filter}' '~{samples}' '~{output_file}'
   >>>
 
   output {

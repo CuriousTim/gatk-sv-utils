@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# GatherGenotypes.TarGenotypes
+# Place genotype files into a tar file.
+#
+# Args: <genotypes_paths> <output>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+genotypes_paths="$1"
+output="$2"
+
+mkdir "${output}"
+while read -r f; do
+  cp "${f}" "${output}"
+done < "${genotypes_paths}"
+tar -cf "${output}.tar" "${output}"

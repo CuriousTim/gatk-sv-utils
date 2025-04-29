@@ -3,13 +3,15 @@
 # EstimateDeNovoRate.CountDeNovos
 # Count de novo events.
 #
-# Args: <genotypes> <trios> <output_db>
+# Args: <genotypes_tar> <trios> <output_db>
 
 set -o errexit
 set -o nounset
 set -o pipefail
 
-genotypes="$1"
+# The tar file must be named <genotypes>.tar and contain a single directory
+# name <genotypes> with all the compressed genotypes files.
+genotypes_tar="$1"
 trios="$2"
 output_db="$3"
 
@@ -19,6 +21,10 @@ output_db="$3"
 tmpdir="$(mktemp -d -p "${PWD}" tmp_XXXXXXXXX)"
 genotypes_db="${tmpdir}/genotypes.duckdb"
 trap 'rm -rf "${tmpdir}"' EXIT
+
+tar -xf "${genotypes_tar}"
+genotypes_dir="$(basename "${genotypes_tar}")"
+genotypes_dir="${genotypes_dir%.tar}"
 
 duckdb -bail -echo "${genotypes_db}" <<EOF
   PRAGMA disable_progress_bar;
@@ -31,7 +37,7 @@ duckdb -bail -echo "${genotypes_db}" <<EOF
     gt UTINYINT,
     gq UTINYINT,
   );
-  COPY genotypes FROM '${genotypes}' (DELIM '\t', NULLSTR 'NA');
+  COPY genotypes FROM '${genotypes_dir}/*.tsv.zst' (DELIM '\t', NULLSTR 'NA');
 EOF
 
 duckdb -bail -echo "${output_db}" <<EOF

@@ -1,10 +1,14 @@
 version 1.0
 
+import "GatherGenotypes.wdl"  as gg
+
 workflow EstimateDeNovoRate {
   input {
     Array[File] vcfs
+    Array[File] vcf_indicies
     File pedigree
     String? vcf_include_filter
+    Int? genotypes_per_shard
     String runtime_docker
   }
 
@@ -18,18 +22,21 @@ workflow EstimateDeNovoRate {
       runtime_docker = runtime_docker
   }
 
-  scatter (vcf in vcfs) {
-    call GatherGenotypes {
+  scatter (i in range(length(vcfs))) {
+    call gg.GatherGenotypes {
       input:
-        vcf = vcf,
+        vcf = vcfs[i],
+        vcf_index = vcf_indicies[i],
         vcf_include_filter = vcf_include_filter,
+        genotypes_per_shard = genotypes_per_shard,
         runtime_docker = runtime_docker
     }
 
     call CountDeNovos {
       input:
-        genotypes = GatherGenotypes.genotypes_tsv,
+        genotypes_tar = GatherGenotypes.genotypes_tar,
         trios = GatherTrios.trios_output,
+        output_prefix = i,
         runtime_docker = runtime_docker
     }
   }
@@ -81,47 +88,11 @@ task GatherTrios {
   }
 }
 
-task GatherGenotypes {
-  input {
-    File vcf
-    String vcf_include_filter = 'FILTER == "PASS" && SVTYPE != "CNV" && SVTYPE != "BND"'
-    String runtime_docker
-
-    Float? memory_gib
-    Int? boot_disk_gb
-    Int? cpus
-    Int? disk_gb
-    Int? max_retries
-    Int? preemptible_tries
-  }
-
-  # The genotypes file get pretty large even when compressed.
-  Float disk_size = size(vcf, "GB") * 4 + 16
-  String genotypes = basename(vcf, ".vcf.gz") + "-genotypes.tsv.zst"
-
-  runtime {
-    bootDiskSizeGb: select_first([boot_disk_gb, 8])
-    cpus: select_first([cpus, 1])
-    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
-    docker: runtime_docker
-    maxRetries: select_first([max_retries, 1])
-    memory: "${select_first([memory_gib, 2])} GiB"
-    preemptible: select_first([preemptible_tries, 3])
-  }
-
-  command <<<
-    /opt/task_scripts/EstimateDeNovoRate/GatherGenotypes '~{vcf}' '~{vcf_include_filter}' '~{genotypes}'
-  >>>
-
-  output {
-    File genotypes_tsv = genotypes
-  }
-}
-
 task CountDeNovos {
   input {
-    File genotypes
+    File genotypes_tar
     File trios
+    String output_prefix
     String runtime_docker
 
     Float? memory_gib
@@ -133,8 +104,8 @@ task CountDeNovos {
   }
 
   # Need space to make genotypes database and counts database.
-  Float disk_size = size(genotypes, "GB") * 2.5 + size(trios, "GB") + 16
-  String output_db = basename(genotypes, "-genotypes.tsv.zst") + "-dn_counts.duckdb"
+  Float disk_size = size(genotypes_tar, "GB") * 2.5 + size(trios, "GB") + 16
+  String output_db = "${output_prefix}-dn_counts.duckdb"
 
   runtime {
     bootDiskSizeGb: select_first([boot_disk_gb, 8])
@@ -147,7 +118,7 @@ task CountDeNovos {
   }
 
   command <<<
-    /opt/task_scripts/EstimateDeNovoRate/CountDeNovos '~{genotypes}' '~{trios}' '~{output_db}'
+    /opt/task_scripts/EstimateDeNovoRate/CountDeNovos '~{genotypes_tar}' '~{trios}' '~{output_db}'
   >>>
 
   output {

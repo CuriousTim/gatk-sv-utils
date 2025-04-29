@@ -15,7 +15,7 @@ BEGIN {
 	Splits_dir = ARGV[3]
 
 	if (Gts_per_split <= 0) {
-		logging::log_err("genotypes per split must be positive")
+		logging::log_err("genotypes per split must be positive. got '" Gts_per_split "'")
 		exit 1
 	}
 

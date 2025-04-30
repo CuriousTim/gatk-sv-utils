@@ -4,7 +4,7 @@ workflow GatherGenotypes {
   input {
     File vcf
     File vcf_index
-    String vcf_include_filter = 'FILTER == "PASS" && SVTYPE != "CNV" && SVTYPE != "BND"'
+    String vcf_include_filter = 'FILTER == "PASS" && SVTYPE != "CNV" && SVTYPE != "BND" && SVTYPE != "CTX"'
     Int genotypes_per_shard = 100000000
     String runtime_docker
   }

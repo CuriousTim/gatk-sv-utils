@@ -34,7 +34,7 @@ workflow EstimateDeNovoRate {
 
     call CountDeNovos {
       input:
-        genotypes_tar = GatherGenotypes.genotypes_tar,
+        genotypes = GatherGenotypes.genotypes,
         trios = GatherTrios.trios_output,
         output_prefix = i,
         runtime_docker = runtime_docker
@@ -90,7 +90,7 @@ task GatherTrios {
 
 task CountDeNovos {
   input {
-    File genotypes_tar
+    Array[File] genotypes
     File trios
     String output_prefix
     String runtime_docker
@@ -104,7 +104,7 @@ task CountDeNovos {
   }
 
   # Need space to make genotypes database and counts database.
-  Float disk_size = size(genotypes_tar, "GB") * 2.5 + size(trios, "GB") + 16
+  Float disk_size = size(genotypes, "GB") * 2.5 + size(trios, "GB") + 16
   String output_db = "${output_prefix}-dn_counts.duckdb"
 
   runtime {
@@ -118,7 +118,8 @@ task CountDeNovos {
   }
 
   command <<<
-    /opt/task_scripts/EstimateDeNovoRate/CountDeNovos '~{genotypes_tar}' '~{trios}' '~{output_db}'
+    /opt/task_scripts/EstimateDeNovoRate/CountDeNovos '~{write_lines(genotypes)}' \
+      '~{trios}' '~{output_db}'
   >>>
 
   output {

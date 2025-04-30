@@ -35,14 +35,8 @@ workflow GatherGenotypes {
     }
   }
 
-  call TarGenotypes {
-    input:
-      genotypes = GatherGenotypesForSamples.genotypes,
-      runtime_docker = runtime_docker
-  }
-
   output {
-    File genotypes_tar = TarGenotypes.genotypes_tar
+    Array[File] genotypes = GatherGenotypesForSamples.genotypes
   }
 }
 
@@ -119,41 +113,5 @@ task GatherGenotypesForSamples {
 
   output {
     File genotypes = output_file
-  }
-}
-
-task TarGenotypes {
-  input {
-    Array[File] genotypes
-    String runtime_docker
-
-    Float? memory_gib
-    Int? boot_disk_gb
-    Int? cpus
-    Int? disk_gb
-    Int? max_retries
-    Int? preemptible_tries
-  }
-
-  # The genotype files are copied to the tar directory.
-  Float disk_size = size(genotypes, "GB") * 2 + 16
-
-  runtime {
-    bootDiskSizeGb: select_first([boot_disk_gb, 8])
-    cpus: select_first([cpus, 1])
-    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
-    docker: runtime_docker
-    maxRetries: select_first([max_retries, 1])
-    memory: "${select_first([memory_gib, 1])} GiB"
-    preemptible: select_first([preemptible_tries, 3])
-  }
-
-  command <<<
-    /opt/task_scripts/GatherGenotypes/TarGenotypes '~{write_lines(genotypes)}' \
-      'genotypes'
-  >>>
-
-  output {
-    File genotypes_tar = 'genotypes.tar'
   }
 }

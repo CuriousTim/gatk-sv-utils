@@ -37,7 +37,7 @@ duckdb -bail -echo "${genotypes_db}" <<EOF
     gt UTINYINT,
     gq UTINYINT,
   );
-  COPY genotypes FROM '${genotypes_dir}/*.tsv.zst' (DELIM '\t', NULLSTR 'NA');
+  COPY genotypes FROM '${genotypes_dir}/*.tsv.zst' (DELIM '\t', NULLSTR '.');
 EOF
 
 duckdb -bail -echo "${output_db}" <<EOF

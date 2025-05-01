@@ -20,10 +20,11 @@ sql_cmds="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
 tmp_merge="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
 trap 'rm -rf "${sql_cmds}" "${tmp_merge}" "${dbs_tar_dir}"' EXIT
 
+# TODO merge inheritance tables.
 declare -i i=0
 while read -r f; do
   dest="${dbs_tar_dir}/counts_db-$(printf '%02d' "${i}").duckdb"
-  cp "${f}" "${dest}"
+  ln -s "${f}" "${dest}"
   printf "ATTACH '%s' AS db_%d;\n" "${dest}" "${i}" >> "${sql_cmds}"
   (( ++i ))
 done < "${dbs_list}"

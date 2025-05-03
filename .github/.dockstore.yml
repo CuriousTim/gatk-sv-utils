@@ -72,3 +72,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: FilterGenotypesByGq
+    subclass: WDL
+    primaryDescriptorPath: /wdl/FilterGenotypesByGq.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

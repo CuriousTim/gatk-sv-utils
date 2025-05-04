@@ -78,6 +78,7 @@ ARGIND == 2 {
 		}
 
 		if (gt["gt"]["GQ"] != "." && (gt["gt"]["GQ"] + 0) < min_gq) {
+			gt["gt"]["GQ"] = "."
 			gt["gt"]["GT"] = "./."
 			$i = vcf::make_format(gt)
 			++Gts_changed

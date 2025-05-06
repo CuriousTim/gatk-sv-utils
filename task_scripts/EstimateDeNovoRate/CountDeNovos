@@ -79,16 +79,4 @@ duckdb -bail -echo "${output_db}" <<EOF
   SET mo_gt = r.gt, mo_gq = r.gq
   FROM gts_db.genotypes r
   WHERE l.mother = r.sid AND l.vid = r.vid;
-
-  CREATE TABLE denovo_counts AS
-  SELECT
-    offspring,
-    svtype,
-    count() AS svs,
-    count() FILTER (of_gt = 1) AS het_svs,
-    count() FILTER (of_gt = 1 AND fa_gt = 0 AND mo_gt = 0) AS dn,
-    count() FILTER (of_gt = 1 AND (fa_gt = 0 OR fa_gt IS NULL) AND (mo_gt = 0 OR mo_gt IS NULL)) AS het_false_dn,
-    count() FILTER (of_gt > 0 AND (fa_gt = 0 OR fa_gt IS NULL) AND (mo_gt = 0 OR mo_gt IS NULL)) AS any_false_dn
-  FROM inheritance
-  GROUP BY offspring, svtype;
 EOF

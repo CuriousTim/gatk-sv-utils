@@ -49,7 +49,7 @@ workflow EstimateDeNovoRate {
 
   output {
     File denovo_counts = MergeDeNovoCounts.merged_denovo_counts
-    File counts_dbs_tar = MergeDeNovoCounts.counts_dbs_tar
+    File merged_db = MergeDeNovoCounts.merged_db
   }
 }
 
@@ -150,7 +150,7 @@ task MergeDeNovoCounts {
     Int? preemptible_tries
   }
 
-  # Each database is copied into the tar directory so need double the space.
+  # All the databases are merged into one so we need double the space.
   Float disk_size = size(counts_dbs, "GB") * 2.5 + 16
 
   runtime {
@@ -167,11 +167,11 @@ task MergeDeNovoCounts {
     /opt/task_scripts/EstimateDeNovoRate/MergeDeNovoCounts \
       '~{write_lines(counts_dbs)}' \
       'merged_denovo_counts.tsv.gz' \
-      'counts_dbs.tar'
+      'inheritance.duckdb'
   >>>
 
   output {
     File merged_denovo_counts = "merged_denovo_counts.tsv.gz"
-    File counts_dbs_tar = "counts_dbs.tar"
+    File merged_db = "inheritance.duckdb"
   }
 }

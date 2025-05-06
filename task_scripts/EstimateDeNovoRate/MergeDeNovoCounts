@@ -11,48 +11,39 @@ set -o pipefail
 
 dbs_list="$1"
 merged_counts="$2"
-dbs_tar="$3"
-
-dbs_tar_dir="${dbs_tar%.tar}"
-mkdir "${dbs_tar_dir}"
+merged_db="$3"
 
 sql_cmds="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
 tmp_merge="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
-trap 'rm -rf "${sql_cmds}" "${tmp_merge}" "${dbs_tar_dir}"' EXIT
+tmp_db_dir="$(mktemp -d -p "${PWD}" tmp_XXXXXXXXX)"
+trap 'rm -rf "${sql_cmds}" "${tmp_merge}" "${tmp_db_dir}"' EXIT
 
-# TODO merge inheritance tables.
 declare -i i=0
 while read -r f; do
-  dest="${dbs_tar_dir}/counts_db-$(printf '%02d' "${i}").duckdb"
+  dest="${tmp_db_dir}/inheritance-$(printf '%02d' "${i}").duckdb"
   ln -s "${f}" "${dest}"
   printf "ATTACH '%s' AS db_%d;\n" "${dest}" "${i}" >> "${sql_cmds}"
   (( ++i ))
 done < "${dbs_list}"
 
 declare -i j=0
-cat >> "${sql_cmds}" <<EOF
-COPY (
-SELECT
-  offspring,
-  svtype,
-  sum(svs) AS svs,
-  sum(het_svs) AS het_svs,
-  sum(dn) AS dn,
-  sum(het_false_dn) AS het_false_dn,
-  sum(any_false_dn) AS any_false_dn
-  FROM (
-EOF
+printf 'CREATE TABLE merged_inh AS SELECT * FROM (\n' >> "${sql_cmds}"
 for (( j=0; j<i - 1; ++j )); do
-  printf 'SELECT * FROM db_%d.denovo_counts UNION ALL\n' "${j}" >> "${sql_cmds}"
+  printf 'SELECT * FROM db_%d.inheritance UNION ALL\n' "${j}" >> "${sql_cmds}"
 done
-printf 'SELECT * FROM db_%d.denovo_counts)\n' "${j}" >> "${sql_cmds}"
+printf 'SELECT * FROM db_%d.inheritance);\n' "${j}" >> "${sql_cmds}"
 
 cat >> "${sql_cmds}" <<EOF
-GROUP BY offspring, svtype)
-TO '${tmp_merge}' (DELIM '\t', HEADER true, FORMAT 'CSV', COMPRESSION 'gzip');
+COPT (
+  SELECT
+    offspring,
+    svtype,
+    count() FILTER (of_gt > 0) AS sv_count,
+    count() FILTER (of_gt = 1 AND fa_gt = 0 AND mo_gt = 0) AS dn_count
+  FROM merged_inh
+  GROUP BY offspring, svtype
+) TO '${tmp_merge}' (DELIM '\t', HEADER true, FORMAT 'CSV', COMPRESSION 'gzip');
 EOF
 
-duckdb -bail -echo < "${sql_cmds}"
+duckdb -bail -echo "${merged_db}" < "${sql_cmds}"
 mv "${tmp_merge}" "${merged_counts}"
-
-tar -cf "${dbs_tar}" "${dbs_tar_dir}"

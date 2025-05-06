@@ -8,6 +8,6 @@ in_vcf="$1"
 out_vcf="$2"
 min_gq="$3"
 
-bcftools plugin setGT "${in_vcf}" -- --target-gt q --new-gt . \
-  --include "INFO/SVTYPE = \"DUP\" & GQ < ${min_gq}" --output "${out_vcf}" --output-type z
+bcftools plugin setGT --output "${out_vcf}" --output-type z "${in_vcf}" -- \
+  --target-gt q --new-gt . --include "INFO/SVTYPE = \"DUP\" & GQ < ${min_gq}"
 bcftools index --tbi "${out_vcf}"

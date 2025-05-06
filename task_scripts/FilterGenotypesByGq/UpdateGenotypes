@@ -6,15 +6,8 @@ set -o pipefail
 
 in_vcf="$1"
 out_vcf="$2"
-svtypes="$3"
-min_gqs="$4"
+min_gq="$3"
 
-thresholds="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
-trap 'rm -f "${thresholds}"' EXIT
-
-paste "${svtypes}" "${min_gqs}" > "${thresholds}"
-bgzip -cd "${in_vcf}" \
-  | gawk -f /opt/gatk-sv-utils/scripts/filter_genotypes_by_gq.awk \
-      <(paste "${svtypes}" "${min_gqs}") -
-  | bzip -c > "${out_vcf}"
+bcftools plugin setGT "${in_vcf}" -- --target-gt q --new-gt . \
+  --include "GQ < ${min_gq}" --output "${out_vcf}" --output-type z
 bcftools index --tbi "${out_vcf}"

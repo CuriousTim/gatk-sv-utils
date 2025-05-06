@@ -1,12 +1,10 @@
 version 1.0
 
-# Set genotypes to missing where the GQ is lower than the threshold. The
-# thresholds are specific to an SV type.
+# Set DUP genotypes to missing where the GQ is lower than the threshold.
 workflow FilterGenotypesByGq {
   input {
     Array[File] vcfs
-    Array[String] svtypes
-    Array[Int] min_gqs
+    Int min_gq
     Array[String]? output_prefix_list
     File? output_prefix_file
 
@@ -19,8 +17,7 @@ workflow FilterGenotypesByGq {
     call UpdateGenotypes {
       input:
         vcf = vcfs[i],
-        svtypes = svtypes,
-        min_gqs = min_gqs,
+        min_gq = min_gq,
         output_prefix = output_prefix[i],
         runtime_docker = runtime_docker
     }
@@ -35,8 +32,7 @@ workflow FilterGenotypesByGq {
 task UpdateGenotypes {
   input {
     File vcf
-    Array[String] svtypes
-    Array[Int] min_gqs
+    Int min_gq
     String output_prefix
     String runtime_docker
 
@@ -64,7 +60,7 @@ task UpdateGenotypes {
 
   command <<<
     /opt/task_scripts/FilterGenotypesByGq/UpdateGenotypes '~{vcf}' \
-      '~{output_vcf}' '~{write_lines(svtypes)}' '~{write_lines(min_gqs)}'
+      '~{output_vcf}' '~{min_gq}'
   >>>
 
   output {

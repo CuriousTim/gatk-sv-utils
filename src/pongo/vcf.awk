@@ -44,35 +44,47 @@ function parse_info(info, a,    i, parts, kv) {
 	}
 }
 
+#' Parse VCF FORMAT field.
+#'
+#' @param fmt FORMAT field for a record.
+#' @param a Array to populate with parsed information. The array will be
+#'   indexed from 1 to the number of FORMAT values and the array values will be
+#'   the FORMAT values.
+function parse_format(fmt, a) {
+	delete a
+	split(fmt, a, /:/)
+}
+
 #' Parse VCF genotype field.
 #'
-#' @param fmt FORMAT field for the record.
-#' @param gt Genotype field for the sample.
+#' @param gt Genotype string for the sample.
+#' @param fmt FORMAT array for the record as produced by `parse_format`.
 #' @param a Array to populate with parsed information. The keys will be the
-#'   ones from the FORMAT field and the values will be the corresponding values
-#'   for the sample.
-function parse_format(fmt, gt, a,    keys, values, i) {
+#'   ones from FORMAT field and the values will the genotype values.
+function parse_genotypes(gt, fmt, a,    n, values, keys, i) {
 	delete a
-	split(fmt, keys, /:/)
-	split(gt, values, /:/)
-	for (i in keys) {
-		a["fmt"][i] = keys[i]
-		a["gt"][keys[i]] = values[i]
+	n = split(gt, values, /:/)
+	if (n != length(fmt)) {
+		return
+	}
+
+	for (i = 1; i <= n; ++i) {
+		a[fmt[i]] = values[i]
 	}
 }
 
-#' Join VCF genotype parts.
+#' Join genotype parts into a VCF sample genotype field.
 #'
-#' @param gt Array of genotype key-value pairs for the sample in the format
-#'   created by `parse_format`.
+#' @param gt Sample genotypes from `parse_genotypes`.
+#' @param fmt Format values from `parse_format`.
 #' @return Genotype string.
-function make_format(gt,    fmt) {
-	for (i in gt["fmt"]) {
-		fmt = gt["gt"][gt["fmt"][i]] ":"
+function make_genotypes(gt, fmt,    i, tmp) {
+	for (i in fmt) {
+		tmp = gt[fmt[i]] ":"
 	}
-	sub(/:$/, "", fmt)
+	sub(/:$/, "", tmp)
 
-	return fmt
+	return tmp
 }
 
 function _parse_structured(x, a,    parts) {

@@ -1,6 +1,6 @@
 version 1.0
 
-import "GatherGenotypes.wdl"  as gg
+import "GatherGenotypes.wdl" as gg
 
 workflow EstimateDeNovoRate {
   input {

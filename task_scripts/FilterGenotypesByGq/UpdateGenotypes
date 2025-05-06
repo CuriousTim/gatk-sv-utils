@@ -9,5 +9,5 @@ out_vcf="$2"
 min_gq="$3"
 
 bcftools plugin setGT "${in_vcf}" -- --target-gt q --new-gt . \
-  --include "GQ < ${min_gq}" --output "${out_vcf}" --output-type z
+  --include "INFO/SVTYPE = \"DUP\" & GQ < ${min_gq}" --output "${out_vcf}" --output-type z
 bcftools index --tbi "${out_vcf}"

@@ -4,7 +4,10 @@ version 1.0
 workflow FilterGenotypesByGq {
   input {
     Array[File] vcfs
-    Int min_gq
+    # For DUPS with 0 <= SVLEN < 500
+    Int small_min_gq
+    # For DUPS with 500 <= SVLEN < 5000
+    Int medium_min_gq
     Array[String]? output_prefix_list
     File? output_prefix_file
 
@@ -17,7 +20,8 @@ workflow FilterGenotypesByGq {
     call UpdateGenotypes {
       input:
         vcf = vcfs[i],
-        min_gq = min_gq,
+        small_min_gq = small_min_gq,
+        medium_min_gq = medium_min_gq,
         output_prefix = output_prefix[i],
         runtime_docker = runtime_docker
     }
@@ -32,7 +36,8 @@ workflow FilterGenotypesByGq {
 task UpdateGenotypes {
   input {
     File vcf
-    Int min_gq
+    Int small_min_gq
+    Int medium_min_gq
     String output_prefix
     String runtime_docker
 
@@ -60,7 +65,7 @@ task UpdateGenotypes {
 
   command <<<
     /opt/task_scripts/FilterGenotypesByGq/UpdateGenotypes '~{vcf}' \
-      '~{output_vcf}' '~{min_gq}'
+      '~{output_vcf}' '~{small_min_gq}' '~{medium_min_gq}'
   >>>
 
   output {

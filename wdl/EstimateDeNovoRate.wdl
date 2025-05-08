@@ -110,7 +110,7 @@ task CountDeNovos {
   # The choice of 1 CPU per GB of genotypes assumes that the genotypes files have a fixed
   # number of genotypes to file size ratio.
   Int genotypes_size = floor(size(genotypes, "GB"))
-  Int predicted_cpus = if genotypes_size < min_cpus then min_cpus else genotypes_size
+  Int predicted_cpus = if (genotypes_size * 2) < min_cpus then min_cpus else (genotypes_size * 2)
   Int default_cpus = if predicted_cpus > max_cpus then max_cpus else predicted_cpus
   # DuckDB recommends 3-4 GB of memory per thread for join-heavy workloads.
   Int default_mem = default_cpus * 4

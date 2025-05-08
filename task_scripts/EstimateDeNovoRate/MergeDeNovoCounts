@@ -34,7 +34,7 @@ done
 printf 'SELECT * FROM db_%d.inheritance);\n' "${j}" >> "${sql_cmds}"
 
 cat >> "${sql_cmds}" <<EOF
-COPT (
+COPY (
   SELECT
     offspring,
     svtype,

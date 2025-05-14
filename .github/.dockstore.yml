@@ -80,3 +80,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: MakeCohortBatchMap
+    subclass: WDL
+    primaryDescriptorPath: /wdl/MakeCohortBatchMap.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

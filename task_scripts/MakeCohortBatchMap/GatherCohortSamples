@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+# MakeCohortBatchMap.GatherCohortSamples
+# Make a table mapping each sample in a sample_set_set to its sample_set.
+#
+# Args: <workspace_namespace> <workspace_name> <sample_set_set_id> <output>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+workspace_namespace="$1"
+workspace_name="$2"
+sample_set_set_id="$3"
+output="$4"
+
+sample_sets="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
+samples="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
+response="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
+trap 'rm -f "${sample_set}" "${samples}" "${response}"' EXIT
+
+curl --oauth2-bearer "$(gcloud auth application-default print-access-token)" \
+  --request GET --header 'accept: */*' \
+  "https://api.firecloud.org/api/workspaces/${workspace_namespace}/${workspace_name}/entities/sample_set_set/${sample_set_set_id}" \
+  | jq --raw-output '.attributes.sample_sets.items[] | .entityName' > "${sample_sets}"
+if [[ ! -s "${sample_sets}" ]]; then
+  printf 'no sample sets found\n' >&2
+  exit 1
+fi
+
+read -r id < "${sample_sets}"
+if [[ "${id}" = 'null' ]]; then
+  printf 'no sample sets found\n' >&2
+  exit 1
+fi
+
+declare -i i=1
+while true; do
+  curl --oauth2-bearer "$(gcloud auth application-default print-access-token)" \
+    --request GET --header 'accept: application/json' \
+    --url-query "page=${i}" \
+    --url-query "pageSize=10" \
+    --url-query "fields=samples" \
+    "https://api.firecloud.org/api/workspaces/${workspace_namespace}/${workspace_name}/entityQuery/sample_set" > "${response}"
+  declare -i max_pages
+  max_pages=$(jq .resultMetadata.filteredPageCount response.json)
+  jq --raw-output \
+    '.results[] | .name as $batch | .attributes.samples.items[] | [$batch, .entityName] | @tsv' "${response}"  >> "${samples}"
+  if (( i >= max_pages )); then
+    break
+  fi
+  i=$(( i + 1 ))
+done
+
+awk -F'\t' 'NR==FNR{a[$1]} NR>FNR && ($1 in a)' "${sample_sets}" "${samples}" > "${output}"

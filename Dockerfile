@@ -12,13 +12,17 @@ ARG BEDTOOLS_URI="https://github.com/arq5x/bedtools2/releases/download/v${BEDTOO
 ARG DUCKDB_VERSION="1.2.2"
 ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
 
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
+    apt-transport-https \
     build-essential \
     bzip2 \
     ca-certificates \
     curl \
     gawk \
+    gnupg \
+    jq \
     libbz2-dev \
     libcurl4-gnutls-dev \
     libdeflate-dev \
@@ -29,6 +33,17 @@ RUN apt-get update \
     xz-utils \
     zlib1g-dev \
     zstd \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+  | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+  | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
+  && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+  | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
+  && apt-get update -y \
+  && apt-get install -y --no-install-recommends google-cloud-cli \
   && rm -rf /var/lib/apt/lists/*
 
 RUN curl -L -o htslib.tar.bz2 "${HTSLIB_URI}" \

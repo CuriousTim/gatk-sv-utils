@@ -88,3 +88,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: MakeFileFromArray
+    subclass: WDL
+    primaryDescriptorPath: /wdl/MakeFileFromArray.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

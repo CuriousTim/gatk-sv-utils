@@ -31,7 +31,7 @@ ENV LC_ALL=en_US.UTF-8
 ENV LANG=en_US.UTF-8
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+  && apt-get install -y -t unstable --no-install-recommends \
     bzip2 \
     curl \
     gawk \
@@ -41,17 +41,21 @@ RUN apt-get update \
     libcurl4-gnutls-dev \
     libdeflate-dev \
     liblzma-dev \
+    libopenblas0-pthread \
     libssl-dev \
     python3-minimal \
-    r-base=${R_VERSION} \
-    r-base-dev=${R_VERSION} \
-    r-base-core=${R_VERSION} \
-    r-recommended=${R_VERSION} \
+    r-base=${R_VERSION}-* \
+    r-base-dev=${R_VERSION}-* \
+    r-base-core=${R_VERSION}-* \
+    r-recommended=${R_VERSION}-* \
     unzip \
     xz-utils \
     zlib1g-dev \
     zstd \
   && rm -rf /var/lib/apt/lists/*
+
+RUN R -e 'install.packages(c("data.table", "optparse", "BiocManager"))' \
+  && R -e 'BiocManager::install(c("Rsamtools", "GenomicRanges"))'
 
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
   | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg

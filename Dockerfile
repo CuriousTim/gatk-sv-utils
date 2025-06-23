@@ -1,17 +1,18 @@
-FROM ubuntu:24.04
+FROM ubuntu:25.04
 
-ARG BCFTOOLS_VERSION="1.21"
+ARG BCFTOOLS_VERSION="1.22"
 ARG BCFTOOLS_URI="https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2"
 
-ARG HTSLIB_VERSION="1.21"
+ARG HTSLIB_VERSION="1.22"
 ARG HTSLIB_URI="https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2"
 
 ARG BEDTOOLS_VERSION="2.31.1"
 ARG BEDTOOLS_URI="https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz"
 
-ARG DUCKDB_VERSION="1.2.2"
+ARG DUCKDB_VERSION="1.3.1"
 ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
 
+ARG R_VERSION="4.4.3"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -29,6 +30,9 @@ RUN apt-get update \
     liblzma-dev \
     libssl-dev \
     python3-minimal \
+    r-base=${R_VERSION} \
+    r-base-dev=${R_VERSION} \
+    r-recommended=${R_VERSION} \
     unzip \
     xz-utils \
     zlib1g-dev \

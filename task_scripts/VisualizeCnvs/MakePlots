@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# VisualizeCnvs.MakePlots
+# Make CNV read-depth plots
+#
+# Args: <cnvs> <batch_ids> <bincov_files> <median_files> <sample_table>
+# <output_prefix>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+cnvs="$1"
+batch_ids="$2"
+bincov_files="$3"
+median_files="$4"
+sample_table="$5"
+output_prefix="$6"
+
+paste "${batch_ids}" "${bincov_files}" > bincov_map.tsv
+paste "${batch_ids}" "${median_files}" > median_map.tsv
+
+Rscript /opt/gatk-sv-utils/scripts/visualize_cnvs.R \
+  --cnvs "${cnvs}" \
+  --sample-batches "${sample_table}" \
+  --coverage-paths bincov_map.tsv \
+  --medians-paths median_map.tsv \
+  --output "${output_prefix}"
+
+tar -zcf "${output_prefix}.tar.gz" "${output_prefix}"

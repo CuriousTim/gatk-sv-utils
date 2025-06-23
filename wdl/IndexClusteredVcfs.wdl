@@ -86,7 +86,21 @@ task IndexVcf {
   }
 
   command <<<
-    /opt/task_scripts/IndexClusteredVcfs/IndexVcf '~{vcf}'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    vcf='~{vcf}'
+    vcf_bn="$(basename "${vcf}")"
+
+    # The VCF index is created in the same directory as the VCF, which could be a
+    # subdirectory of the current execution directory. Then, on Terra (and Cromwell)
+    # when the index is delocalized, it is placed in a subdirectory of the
+    # submission directory which could cause it to have a long path. Moving the VCF
+    # to the current directory before indexing makes the index get delocalized to
+    # the top level submission directory.
+    mv "${vcf}" "${PWD}"
+    tabix "${vcf}"
   >>>
 
   output {

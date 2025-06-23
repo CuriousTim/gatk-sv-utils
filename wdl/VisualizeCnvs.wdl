@@ -14,7 +14,8 @@ workflow VisualizeCnvs {
     Array[File] bincov_files
     Array[File] bincov_index_files
 
-    String runtime_docker
+    String base_docker
+    String r_docker
   }
 
   scatter (vcf in vcfs) {
@@ -23,7 +24,7 @@ workflow VisualizeCnvs {
         vcf = vcf,
         min_size = min_size,
         variants_per_shard = variants_per_shard,
-        runtime_docker = runtime_docker
+        base_docker = base_docker
     }
   }
 
@@ -33,7 +34,7 @@ workflow VisualizeCnvs {
         bincov = bincov_files[i],
         bincov_index = bincov_index_files[i],
         intervals = ExtractVariants.intervals,
-        runtime_docker = runtime_docker
+        base_docker = base_docker
     }
   }
 
@@ -47,7 +48,7 @@ workflow VisualizeCnvs {
         bincov_index_files= SubsetBincovMatrix.bincov_subset_index,
         median_files = median_files,
         sample_table = sample_table,
-        runtime_docker = runtime_docker,
+        r_docker = r_docker
     }
   }
 
@@ -55,7 +56,7 @@ workflow VisualizeCnvs {
     input:
       plot_tars = MakePlots.plots,
       plot_prefix = plot_prefix,
-      runtime_docker = runtime_docker
+      base_docker = base_docker
   }
 
   output {
@@ -68,7 +69,7 @@ task ExtractVariants {
     File vcf
     Int min_size
     Int variants_per_shard
-    String runtime_docker
+    String base_docker
   }
 
   Float disk_size = size(vcf, "GB") * 2 + 16
@@ -77,7 +78,7 @@ task ExtractVariants {
     bootDiskSizeGb: 8
     cpu: 1
     disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: runtime_docker
+    docker: base_docker
     maxRetries: 1
     memory: "4 GiB"
     preemptible: 3
@@ -88,12 +89,25 @@ task ExtractVariants {
     set -o nounset
     set -o pipefail
 
-    /opt/task_scripts/VisualizeCnvs/ExtractVariants '~{vcf}' '~{min_size}' \
-      'cnvs_' '~{variants_per_shard}'  merged_intervals.bed
+    vcf='~{vcf}'
+    min_size='~{min_size}'
+    variants_per_shard='~{variants_per_shard}'
+
+    bcftools view --include "(SVTYPE == \"DEL\" || SVTYPE == \"DUP\") & FILTER ~ \"PASS\" & SVLEN >= ${min_size} & GT ~ \"1\"" \
+      --format '%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/SVTYPE\t[%SAMPLE,]\n' "${vcf}" \
+      | awk -F'\t' '{sub(/,$/, "", $6); print}' OFS='\t' > cnvs.tsv
+
+    # merge intervals that are close to prevent duplicates when retrieving with
+    # tabix
+    awk -F'\t' '{print $1"\t"($2 - 1)"\t"$3}' cnvs.tsv \
+      | LC_ALL=C sort -k1,1 -k2,2n \
+      | bedtools merge -i stdin -d 101 > merged_intervals.bed
+
+    split -l ${variants_per_shard} cnvs.tsv cnvs_
   >>>
 
   output {
-    Array[File] variants = glob("cnvs_")
+    Array[File] variants = glob("cnvs_*")
     File intervals = "merged_intervals.bed"
   }
 }
@@ -103,7 +117,7 @@ task SubsetBincovMatrix {
     File bincov
     File bincov_index
     Array[File] intervals
-    String runtime_docker
+    String base_docker
   }
 
   Float disk_size = size(bincov, "GB") * 2 + 16
@@ -112,7 +126,7 @@ task SubsetBincovMatrix {
     bootDiskSizeGb: 8
     cpu: 1
     disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: runtime_docker
+    docker: base_docker
     maxRetries: 1
     memory: "4 GiB"
     preemptible: 3
@@ -125,8 +139,20 @@ task SubsetBincovMatrix {
     set -o nounset
     set -o pipefail
 
-    /opt/task_scripts/VisualizeCnvs/SubsetBincovMatrix '~{write_lines(intervals)}' \
-      '~{bincov}' '~{bincov_bn}'
+    intervals='~{write_lines(intervals)}'
+    bincov='~{bincov}'
+    bincov_bn='~{bincov_bn}'
+
+    # need to expand the intervals so that padding can be added when plotting
+    cat "${intervals}" \
+      | xargs cat \
+      | awk -F'\t' '{s=$3 - $2; pad=int(s / 2) + 1; min=$2 - pad; $2=min < 0 ? 0 : min; $3+=pad; print}' OFS='\t' \
+      | sort -k1,1 -k2,2n \
+      | bedtools merge -i stdin -d 101 \
+      | awk -F'\t' '{$2+=1} 1' OFS="\t" > merged_intervals.tsv
+    tabix --print-header --regions merged_intervals.tsv "${bincov}" \
+      | bgzip > "${bincov_bn}"
+    tabix --zero-based --begin 2 --comment '#' --end 3 --sequence 1 "${bincov_bn}"
   >>>
 
   output {
@@ -143,7 +169,7 @@ task MakePlots {
     Array[File] bincov_index_files
     Array[File] median_files
     File sample_table
-    String runtime_docker
+    String r_docker
   }
 
   Int variant_count = length(read_lines(variants))
@@ -158,7 +184,7 @@ task MakePlots {
     bootDiskSizeGb: 8
     cpu: 2
     disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: runtime_docker
+    docker: r_docker
     maxRetries: 1
     memory: "8 GiB"
     preemptible: 3
@@ -169,13 +195,23 @@ task MakePlots {
     set -o nounset
     set -o pipefail
 
-    /opt/task_scripts/VisualizeCnvs/MakePlots \
-      '~{variants}' \
-      '~{write_lines(sample_set_ids)}' \
-      '~{write_lines(bincov_files)}' \
-      '~{write_lines(median_files)}' \
-      '~{sample_table}' \
-      plots
+    batch_ids='~{write_lines(sample_set_ids)}'
+    bincov_files='~{write_lines(bincov_files)}'
+    median_files='~{write_lines(median_files)}'
+    variants='~{variants}'
+    sample_table='~{sample_table}'
+
+    paste "${batch_ids}" "${bincov_files}" > bincov_map.tsv
+    paste "${batch_ids}" "${median_files}" > median_map.tsv
+
+    Rscript /opt/gatk-sv-utils/scripts/visualize_cnvs.R \
+      --cnvs "${variants}" \
+      --sample-batches "${sample_table}" \
+      --coverage-paths bincov_map.tsv \
+      --medians-paths median_map.tsv \
+      --output plots
+
+    tar -czf plots.tar.gz plots
   >>>
 
   output {
@@ -187,7 +223,7 @@ task MergePlotTars {
   input {
     Array[File] plot_tars
     String plot_prefix
-    String runtime_docker
+    String base_docker
   }
 
   Float disk_size = size(plot_tars, "GB") * 3 + 16
@@ -196,15 +232,29 @@ task MergePlotTars {
     bootDiskSizeGb: 8
     cpu: 1
     disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: runtime_docker
+    docker: base_docker
     maxRetries: 1
     memory: "1 GiB"
     preemptible: 3
   }
 
   command <<<
-    /opt/task_scripts/VisualizeCnvs/MergePlotTars '~{write_lines(plot_tars)}' \
-      '~{plot_prefix}'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    plot_tars='~{write_lines(plot_tars)}'
+    plot_prefix='~{plot_prefix}'
+
+    mkdir temp
+    while read -r f; do
+      tar -xzf "${f}"
+      mv -t temp plots/*.jpg
+      rm -r plots
+    done < "${plot_tars}"
+
+    mv temp "${plot_prefix}"
+    tar -czf "${plot_prefix}.tar.gz" "${plot_prefix}"
   >>>
 
   output {

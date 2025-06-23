@@ -30,40 +30,57 @@ workflow SplitVcfByContig {
 }
 
 task GetContigFromVcf {
-    input {
-      File vcf
-      File vcf_index
-      String contig
-      String runtime_docker
+  input {
+    File vcf
+    File vcf_index
+    String contig
+    String runtime_docker
 
-      Float? memory_gib
-      Int? disk_gb
-      Int? cpus
-      Int? preemptible_tries
-      Int? max_retries
-      Int? boot_disk_gb
-    }
+    Float? memory_gib
+    Int? disk_gb
+    Int? cpus
+    Int? preemptible_tries
+    Int? max_retries
+    Int? boot_disk_gb
+  }
 
-    Float disk_size = size([vcf, vcf_index], "GB") * 1.2 + 16
-    String output_vcf = "${contig}-${basename(vcf)}"
-    String output_vcf_index = "${output_vcf}.tbi"
+  Float disk_size = size([vcf, vcf_index], "GB") * 1.2 + 16
+  String output_vcf = "${contig}-${basename(vcf)}"
+  String output_vcf_index = "${output_vcf}.tbi"
 
-    runtime {
-      bootDiskSizeGb: select_first([boot_disk_gb, 16])
-      cpus: select_first([cpus, 1])
-      disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
-      docker: runtime_docker
-      maxRetries: select_first([max_retries, 1])
-      memory: "${select_first([memory_gib, 2])} GiB"
-      preemptible: select_first([preemptible_tries, 3])
-    }
+  runtime {
+    bootDiskSizeGb: select_first([boot_disk_gb, 16])
+    cpus: select_first([cpus, 1])
+    disks: "local-disk ${select_first([disk_gb, ceil(disk_size)])} HDD"
+    docker: runtime_docker
+    maxRetries: select_first([max_retries, 1])
+    memory: "${select_first([memory_gib, 2])} GiB"
+    preemptible: select_first([preemptible_tries, 3])
+  }
 
-    command <<<
-       /opt/task_scripts/SplitVcfByContig/GetContigFromVcf '~{vcf}' '~{contig}' '~{output_vcf}'
-    >>>
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
 
-    output {
-      File contig_vcf = "${output_vcf}"
-      File contig_vcf_index = "${output_vcf_index}"
-    }
+    in_vcf='~{vcf}'
+    contig='~{contig}'
+    out_vcf='~{output_vcf}'
+
+    { bcftools index --stats "${in_vcf}" | grep -F "^${contig}\$" - } \
+      || { printf '%s not in vcf\n' "${contig}" >&2 && exit 1; }
+    trap 'rm -f "${tmpfile}"' EXIT
+    tmpfile="$(mktemp -p "${PWD}")"
+    bcftools head "${in_vcf}" \
+      | gawk '/^##contig=/{match($0, /<ID=([^,>]+)/, a); if (RSTART && t == a[1]){print} next} 1' t="${contig}" - > "${tmpfile}"
+    bcftools view --output-type u --regions "${contig}" "${in_vcf}" \
+      | bcftools reheader --header "${tmpfile}" - \
+      | bcftools view --output-type z --output "${out_vcf}" -
+    bcftools index --tbi "${out_vcf}"
+  >>>
+
+  output {
+    File contig_vcf = "${output_vcf}"
+    File contig_vcf_index = "${output_vcf_index}"
+  }
 }

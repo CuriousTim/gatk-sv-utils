@@ -61,7 +61,18 @@ task MoveVcfFilters {
   }
 
   command <<<
-    /opt/task_scripts/MoveVcfFiltersToInfo/MoveVcfFilters '~{vcf}' '~{output_vcf}'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    in_vcf='~{vcf}'
+    out_vcf='~{output_vcf}'
+
+    # faster to skip bcftools parsing
+    bgzip -cd "${in_vcf}" \
+      | gawk -f /opt/gatk-sv-utils/scripts/move_vcf_filters.awk - \
+      | bgzip -c > "${out_vcf}"
+    bcftools index --tbi "${out_vcf}"
   >>>
 
   output {

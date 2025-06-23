@@ -1,4 +1,4 @@
-FROM debian:testing
+FROM ubuntu:25.04
 
 ARG BCFTOOLS_VERSION="1.22"
 ARG BCFTOOLS_URI="https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2"
@@ -12,31 +12,12 @@ ARG BEDTOOLS_URI="https://github.com/arq5x/bedtools2/releases/download/v${BEDTOO
 ARG DUCKDB_VERSION="1.3.1"
 ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
 
-ARG R_VERSION="4.5.1"
-
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     apt-transport-https \
     build-essential \
-    ca-certificates \
-    curl \
-    locales \
-  && rm -rf /var/lib/apt/lists/*
-
-RUN echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
-  && locale-gen en_US.utf8 \
-  && /usr/sbin/update-locale LANG=en_US.UTF-8
-
-ENV LC_ALL=en_US.UTF-8
-ENV LANG=en_US.UTF-8
-
-RUN echo "deb http://http.debian.net/debian sid main" > /etc/apt/sources.list.d/debian-unstable.list \
-  && echo 'APT::Default-Release "testing";' > /etc/apt/apt.conf.d/default \
-  && echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/90local-no-recommends
-
-RUN apt-get update \
-  && apt-get install -y -t unstable --no-install-recommends \
     bzip2 \
+    ca-certificates \
     curl \
     gawk \
     gnupg \
@@ -48,18 +29,11 @@ RUN apt-get update \
     libopenblas0-pthread \
     libssl-dev \
     python3-minimal \
-    r-base=${R_VERSION}-* \
-    r-base-dev=${R_VERSION}-* \
-    r-base-core=${R_VERSION}-* \
-    r-recommended=${R_VERSION}-* \
     unzip \
     xz-utils \
     zlib1g-dev \
     zstd \
   && rm -rf /var/lib/apt/lists/*
-
-RUN R -e 'install.packages(c("data.table", "optparse", "BiocManager"), INSTALL_opts = c("--no-docs", "--no-help", "--no-html", "--no-data"))' \
-  && R -e 'BiocManager::install(c("Rsamtools", "GenomicRanges"), INSTALL_opts = c("--no-docs", "--no-help", "--no-html", "--no-data"))'
 
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
   | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
@@ -110,7 +84,7 @@ RUN mkdir /opt/task_scripts
 COPY --chmod=755 task_scripts /opt/task_scripts
 
 RUN mkdir -p /opt/gatk-sv-utils/scripts
-COPY src/scripts /opt/gatk-sv-utils/scripts
+COPY src/scripts/base /opt/gatk-sv-utils/scripts
 
 ENV AWKPATH='.:/usr/local/share/awk/pongo'
 RUN mkdir -p /usr/local/share/awk/pongo

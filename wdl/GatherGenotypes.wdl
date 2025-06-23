@@ -68,8 +68,12 @@ task SplitVcfSamples {
   }
 
   command <<<
-    /opt/task_scripts/GatherGenotypes/SplitVcfSamples '~{vcf}' \
-      '~{genotypes_per_shard}' 'shards'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    gawk -f /opt/gatk-sv-utils/scripts/split_vcf_samples.awk \
+        '~{vcf}' '~{genotypes_per_shard}' shards
   >>>
 
   output {
@@ -107,8 +111,25 @@ task GatherGenotypesForSamples {
   }
 
   command <<<
-    /opt/task_scripts/GatherGenotypes/GatherGenotypesForSamples '~{vcf}' \
-      '~{vcf_include_filter}' '~{samples}' '~{output_file}'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    vcf='~{vcf}'
+    filter='~{vcf_include_filter}'
+    samples='~{samples}'
+    output='~{output_file}'
+
+    bcftools query --include "${filter}" --samples-file "${samples}" \
+      --format '[%SAMPLE\t%ID\t%INFO/SVTYPE\t%INFO/SVLEN\t%GT\t%GQ\n]' "${vcf}" \
+      | gawk -i logging \
+          'BEGIN{FS="\t"; OFS="\t"}
+           $5 == "0/0" {$5 = 0; print; next}
+           $5 == "1/0" || $5 == "0/1" {$5 = 1; print; next}
+           $5 == "1/1" {$5 = 2; print; next}
+           $5 == "./." {$5 = "."; print; next}
+           {logging::log_err("unknown genotype in record: " $0); exit 1}' \
+      | zstd -c > "${output}"
   >>>
 
   output {

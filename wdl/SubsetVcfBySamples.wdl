@@ -93,7 +93,11 @@ task GetSamplesFromFamilies {
   }
 
   command <<<
-    /opt/task_scripts/SubsetVcfBySamples/GetSamplesFromFamilies \
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    gawk -f /opt/gatk-sv-utils/scripts/get_samples_from_families.awk \
       ~{if defined(families) then "--families '" + families + "'" else "--nfamilies " + nfamilies} \
       '~{pedigree}' > "samples.list"
   >>>
@@ -137,7 +141,11 @@ task SubsetVcf {
   String output_vcf_index = "${output_vcf}.tbi"
 
   command <<<
-    /opt/task_scripts/SubsetVcfBySamples/SubsetVcf \
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    gawk -f /opt/gatk-sv-utils/scripts/subset_vcf.awk \
       ~{if defined(samples) then "--samples '" + samples + "'" else "--nsamples " + nsamples} \
       ~{if remove_private_sites then "" else "--keep-private-sites"} \
       ~{if keep_af then "" else "--update-af"} \

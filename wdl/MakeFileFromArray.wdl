@@ -42,8 +42,14 @@ task MakeFileFromArrayTask {
   }
 
   command <<<
-    /opt/task_scripts/MakeFileFromArray/MakeFileFromArrayTask \
-      '~{write_lines(arr)}' arrayfile.list
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    input='~{write_lines(arr)}'
+    output=arrayfile.list
+
+    mv "${input}" "${output}"
   >>>
 
   output {

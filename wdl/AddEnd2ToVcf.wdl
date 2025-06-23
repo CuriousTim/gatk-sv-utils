@@ -49,7 +49,15 @@ task AddEnd2 {
   }
 
   command <<<
-    /opt/task_scripts/AddEnd2ToVcf/AddEnd2 '~{vcf}' '~{output_vcf}'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    # faster to skip bcftools parsing
+    bgzip -cd '~{vcf}' \
+      | gawk -f /opt/gatk-sv-utils/scripts/add_end2_to_vcf.awk - \
+      | bgzip -c > '~{output_vcf}'
+    bcftools index --tbi '~{output_vcf}'
   >>>
 
   output {

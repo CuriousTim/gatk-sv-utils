@@ -1,4 +1,4 @@
-docker_name := gatk-sv-utils
+project_name := gatk-sv-utils
 commit_sha := $(shell git rev-parse --short HEAD)
 ifneq ($(.SHELLSTATUS), 0)
 $(error failed to get git commit hash)
@@ -14,15 +14,30 @@ ifneq ($(.SHELLSTATUS), 0)
 $(error failed to get git branch)
 endif
 
-docker_tag := $(if $(DOCKER_REPO),$(DOCKER_REPO)/)$(docker_name):$(date)-$(branch)-$(commit_sha)
+docker_tag = $(if $(DOCKER_REPO),$(DOCKER_REPO)/)$(project_name):$(date)-$(docker_name)-$(commit_sha)
+
+define build-docker =
+docker build -t $(docker_tag) $<
+endef
+
+define push-docker =
+docker push $(docker_tag)
+endef
 
 .PHONY: all
 all: ;
 
-.PHONY: docker-build
-docker-build:
-	docker build -t $(docker_tag) .
+.PHONY: docker
+docker-build: docker-base docker-r
 
-.PHONY: docker-push
-docker-push:
-	docker push $(docker_tag)
+.PHONY: docker-base
+docker-base: docker/base/Dockerfile
+docker_name := base
+	$(build-docker)
+	$(push-docker)
+
+.PHONY: docker-r
+docker-r: docker/r/Dockerfile
+docker_name := r
+	$(build-docker)
+	$(push-docker)

@@ -64,8 +64,22 @@ task UpdateGenotypes {
   }
 
   command <<<
-    /opt/task_scripts/FilterGenotypesByGq/UpdateGenotypes '~{vcf}' \
-      '~{output_vcf}' '~{small_min_gq}' '~{medium_min_gq}'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    in_vcf='~{vcf}'
+    out_vcf='~{output_vcf}'
+    small_min_gq='~{small_min_gq}'
+    medium_min_gq='~{medium_min_gq}'
+
+    bcftools plugin setGT  --output-type u "${in_vcf}" -- \
+      --target-gt q --new-gt . \
+      --include "INFO/SVTYPE = \"DUP\" & INFO/SVLEN >= 0 & INFO/SVLEN < 500 & GQ < ${small_min_gq}" \
+      | bcftools plugin setGT --output-type z --output "${out_vcf}" - -- \
+          --target-gt q --new-gt . \
+          --include "INFO/SVTYPE = \"DUP\" & INFO/SVLEN >= 500 & INFO/SVLEN < 5000 & GQ < ${medium_min_gq}"
+    bcftools index --tbi "${out_vcf}"
   >>>
 
   output {

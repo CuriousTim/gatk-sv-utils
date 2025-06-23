@@ -59,8 +59,25 @@ task SetGenotypesNullTask {
   }
 
   command <<<
-     /opt/task_scripts/SetGenotypesNull/SetGenotypesNullTask '~{vcf}' \
-      '~{output_vcf}' '~{samples_list}' '~{write_lines(contigs_set)}'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    in_vcf='~{vcf}'
+    out_vcf='~{output_vcf}'
+    samples='~{samples_list}'
+    contigs='~{write_lines(contigs_set)}'
+
+    wc -l "${samples}" | read -r nsamples other
+    if (( nsamples == 0 )); then
+      printf 'expected at least one sample. none given.\n' > /dev/stderr
+      exit 1
+    fi
+
+    bgzip -cd "${in_vcf}" \
+    | gawk -f /opt/gatk-sv-utils/scripts/set_gt_null.awk "${contigs}" "${samples}" - \
+    | bgzip -c > "${out_vcf}"
+    bcftools index --tbi "${out_vcf}"
   >>>
 
   output {

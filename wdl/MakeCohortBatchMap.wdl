@@ -48,11 +48,56 @@ task GatherCohortSamples {
 
   String sample_batch_map = sample_set_set_id + "-batch_map.tsv"
   command <<<
-    /opt/task_scripts/MakeCohortBatchMap/GatherCohortSamples \
-      '~{workspace_namespace}' \
-      '~{workspace_name}' \
-      '~{sample_set_set_id}' \
-      '~{sample_batch_map}'
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    workspace_namespace='~{workspace_namespace}'
+    workspace_name='~{workspace_name}'
+    sample_set_set_id='~{sample_set_set_id}'
+    output='~{sample_batch_map}'
+
+    sample_sets="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
+    samples="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
+    response="$(mktemp -p "${PWD}" tmp_XXXXXXXXX)"
+    trap 'rm -f "${sample_sets}" "${samples}" "${response}"' EXIT
+
+    curl --oauth2-bearer "$(gcloud auth application-default print-access-token)" \
+      --request GET --header 'accept: */*' \
+      --silent --show-error \
+      "https://api.firecloud.org/api/workspaces/${workspace_namespace}/${workspace_name}/entities/sample_set_set/${sample_set_set_id}" \
+      | jq --raw-output '.attributes.sample_sets.items[] | .entityName' > "${sample_sets}"
+    if [[ ! -s "${sample_sets}" ]]; then
+      printf 'no sample sets found\n' >&2
+      exit 1
+    fi
+
+    read -r id < "${sample_sets}"
+    if [[ "${id}" = 'null' ]]; then
+      printf 'no sample sets found\n' >&2
+      exit 1
+    fi
+
+    declare -i i=1
+    while true; do
+      curl --oauth2-bearer "$(gcloud auth application-default print-access-token)" \
+        --request GET --header 'accept: application/json' \
+        --url-query "page=${i}" \
+        --url-query "pageSize=10" \
+        --url-query "fields=samples" \
+        --silent --show-error \
+        "https://api.firecloud.org/api/workspaces/${workspace_namespace}/${workspace_name}/entityQuery/sample_set" > "${response}"
+      declare -i max_pages
+      max_pages=$(jq .resultMetadata.filteredPageCount "${response}")
+      jq --raw-output \
+        '.results[] | .name as $batch | .attributes.samples.items[] | [$batch, .entityName] | @tsv' "${response}"  >> "${samples}"
+      if (( i >= max_pages )); then
+        break
+      fi
+      i=$(( i + 1 ))
+    done
+
+    awk -F'\t' 'NR==FNR{a[$1]} NR>FNR && ($1 in a)' "${sample_sets}" "${samples}" > "${output}"
   >>>
 
   output {

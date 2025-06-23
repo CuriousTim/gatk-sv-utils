@@ -12,7 +12,7 @@ ARG BEDTOOLS_URI="https://github.com/arq5x/bedtools2/releases/download/v${BEDTOO
 ARG DUCKDB_VERSION="1.3.1"
 ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
 
-ARG R_VERSION="4.4.3"
+ARG R_VERSION="4.5.1"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \

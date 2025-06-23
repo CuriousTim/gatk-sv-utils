@@ -30,6 +30,10 @@ RUN echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
 ENV LC_ALL=en_US.UTF-8
 ENV LANG=en_US.UTF-8
 
+RUN echo "deb http://http.debian.net/debian sid main" > /etc/apt/sources.list.d/debian-unstable.list \
+  && echo 'APT::Default-Release "testing";' > /etc/apt/apt.conf.d/default \
+  && echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/90local-no-recommends
+
 RUN apt-get update \
   && apt-get install -y -t unstable --no-install-recommends \
     bzip2 \

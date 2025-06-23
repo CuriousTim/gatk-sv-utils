@@ -58,8 +58,8 @@ RUN apt-get update \
     zstd \
   && rm -rf /var/lib/apt/lists/*
 
-RUN R -e 'install.packages(c("data.table", "optparse", "BiocManager"))' \
-  && R -e 'BiocManager::install(c("Rsamtools", "GenomicRanges"))'
+RUN R -e 'install.packages(c("data.table", "optparse", "BiocManager"), INSTALL_opts = c("--no-docs", "--no-help", "--no-html", "--no-data"))' \
+  && R -e 'BiocManager::install(c("Rsamtools", "GenomicRanges"), INSTALL_opts = c("--no-docs", "--no-help", "--no-html", "--no-data"))'
 
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
   | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg

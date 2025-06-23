@@ -1,4 +1,4 @@
-FROM ubuntu:25.04
+FROM debian:testing
 
 ARG BCFTOOLS_VERSION="1.22"
 ARG BCFTOOLS_URI="https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2"
@@ -18,8 +18,21 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     apt-transport-https \
     build-essential \
-    bzip2 \
     ca-certificates \
+    curl \
+    locales \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
+  && locale-gen en_US.utf8 \
+  && /usr/sbin/update-locale LANG=en_US.UTF-8
+
+ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bzip2 \
     curl \
     gawk \
     gnupg \
@@ -32,6 +45,7 @@ RUN apt-get update \
     python3-minimal \
     r-base=${R_VERSION} \
     r-base-dev=${R_VERSION} \
+    r-base-core=${R_VERSION} \
     r-recommended=${R_VERSION} \
     unzip \
     xz-utils \

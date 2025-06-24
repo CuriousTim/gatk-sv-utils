@@ -93,7 +93,7 @@ task ExtractVariants {
     min_size='~{min_size}'
     variants_per_shard='~{variants_per_shard}'
 
-    bcftools view --include "(SVTYPE == \"DEL\" || SVTYPE == \"DUP\") & FILTER ~ \"PASS\" & SVLEN >= ${min_size} & GT ~ \"1\"" \
+    bcftools query --include "(SVTYPE == \"DEL\" || SVTYPE == \"DUP\") & FILTER ~ \"PASS\" & SVLEN >= ${min_size} & GT ~ \"1\"" \
       --format '%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/SVTYPE\t[%SAMPLE,]\n' "${vcf}" \
       | awk -F'\t' '{sub(/,$/, "", $6); print}' OFS='\t' > cnvs.tsv
 

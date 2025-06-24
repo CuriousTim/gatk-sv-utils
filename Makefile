@@ -17,7 +17,7 @@ endif
 docker_tag = $(if $(DOCKER_REPO),$(DOCKER_REPO)/)$(project_name):$(date)-$(docker_name)-$(commit_sha)
 
 define build-docker =
-docker build -t $(docker_tag) $<
+docker build -t $(docker_tag) -f $< .
 endef
 
 define push-docker =
@@ -31,13 +31,17 @@ all: ;
 docker-build: docker-base docker-r
 
 .PHONY: docker-base
+docker-base: docker_name := base
 docker-base: docker/base/Dockerfile
-docker_name := base
 	$(build-docker)
+ifneq ($(strip $(DOCKER_REPO)),)
 	$(push-docker)
+endif
 
 .PHONY: docker-r
+docker-r: docker_name := r
 docker-r: docker/r/Dockerfile
-docker_name := r
 	$(build-docker)
+ifneq ($(strip $(DOCKER_REPO)),)
 	$(push-docker)
+endif

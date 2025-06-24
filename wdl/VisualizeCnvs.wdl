@@ -243,7 +243,6 @@ task SubsetBincovMatrix {
     set -o nounset
     set -o pipefail
 
-    batch='~{batch}'
     intervals='~{intervals}'
     bincov='~{bincov}'
     bincov_subset='~{output_name}'

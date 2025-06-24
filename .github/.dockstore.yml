@@ -96,3 +96,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: VisualizeCnvs
+    subclass: WDL
+    primaryDescriptorPath: /wdl/VisualizeCnvs.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

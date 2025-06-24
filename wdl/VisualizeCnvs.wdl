@@ -22,6 +22,7 @@ workflow VisualizeCnvs {
     call ExtractVariants {
       input:
         vcf = vcf,
+        sample_table = sample_table,
         min_size = min_size,
         variants_per_shard = variants_per_shard,
         base_docker = base_docker

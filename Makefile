@@ -1,3 +1,5 @@
+DOCKER := docker
+
 project_name := gatk-sv-utils
 commit_sha := $(shell git rev-parse --short HEAD)
 ifneq ($(.SHELLSTATUS), 0)
@@ -17,11 +19,11 @@ endif
 docker_tag = $(if $(DOCKER_REPO),$(DOCKER_REPO)/)$(project_name):$(date)-$(docker_name)-$(commit_sha)
 
 define build-docker =
-docker build -t $(docker_tag) -f $< .
+$(DOCKER) build -t $(docker_tag) -f $< .
 endef
 
 define push-docker =
-docker push $(docker_tag)
+$(DOCKER) push $(docker_tag)
 endef
 
 .PHONY: all

@@ -28,7 +28,7 @@ endef
 all: ;
 
 .PHONY: docker
-docker-build: docker-base docker-r
+docker: docker-base docker-r
 
 .PHONY: docker-base
 docker-base: docker_name := base

@@ -80,9 +80,6 @@ RUN curl -L -o duckdb_cli-linux-amd64.zip "${DUCKDB_URI}" \
   && unzip duckdb_cli-linux-amd64.zip -d /usr/local/bin \
   && rm duckdb_cli-linux-amd64.zip
 
-RUN mkdir /opt/task_scripts
-COPY --chmod=755 task_scripts /opt/task_scripts
-
 RUN mkdir -p /opt/gatk-sv-utils/scripts
 COPY src/scripts/base /opt/gatk-sv-utils/scripts
 

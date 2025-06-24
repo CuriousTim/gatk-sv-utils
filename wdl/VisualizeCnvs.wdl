@@ -83,7 +83,7 @@ workflow VisualizeCnvs {
 
   call ShardVariants {
     input:
-      variants = flatten(ExtractVariants.variants),
+      variants = ExtractVariants.variants,
       sample_table = sample_table,
       variants_per_shard = variants_per_shard,
       bincov_subset_map = write_map(MakeBincovSubsetMap.m),
@@ -164,7 +164,7 @@ task ExtractVariants {
   >>>
 
   output {
-    Array[File] variants = "cnvs.tsv"
+    File variants = "cnvs.tsv"
     Array[File] intervals = glob("intervals/*")
   }
 }

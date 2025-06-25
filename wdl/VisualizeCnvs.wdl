@@ -96,7 +96,7 @@ workflow VisualizeCnvs {
     call MakePlots {
       input:
         variants = ShardVariants.shards[i],
-        sample_set_ids = sample_set_ids,
+        batches = ShardVariants.batches[i],
         bincov_files = read_lines(ShardVariants.bincov_paths[i]),
         bincov_index_files= read_lines(ShardVariants.bincov_index_paths[i]),
         medians_files = read_lines(ShardVariants.medians_paths[i]),
@@ -300,52 +300,65 @@ task ShardVariants {
     medians_map='~{medians_map}'
 
     cat "${variants}" | xargs cat > merged_cnvs.tsv
-    mkdir shards bincov bincov_index medians
+    mkdir shards batches bincov bincov_index medians
     split -l "${variants_per_shard}" merged_cnvs.tsv shards/cnvs_
 
+    # The order of the batch ids in the list for each shard must match the
+    # order in the lists of the other data files or the batches could
+    # map to the wrong files.
     gawk -F'\t' '
     ARGIND == 1 {
-      sample_arr[$1] = $2
+      Sample_arr[$1] = $2
     }
     ARGIND == 2 {
-      bincov_arr[$1] = $2
+      Bincov_arr[$1] = $2
     }
     ARGIND == 3 {
-      bincov_index_arr[$1] = $2
+      Bincov_index_arr[$1] = $2
     }
     ARGIND == 4 {
-      medians_arr[$1] = $2
-    }
-    ARGIND > 4 && FNR == 1 {
-      if (bincov_out) {
-        close(bincov_out)
-      }
-      if (bincov_index_out) {
-        close(bincov_index_out)
-      }
-      if (medians_out) {
-        close(medians_out)
-      }
-      n = split(FILENAME, p, /\//)
-      bn = p[n]
-      bincov_out = "sort -u > bincov/" bn
-      bincov_index_out = "sort -u > bincov_index/" bn
-      medians_out = "sort -u > medians/" bn
+      Medians_arr[$1] = $2
     }
     ARGIND > 4 {
-      split($6, b, /,/);
+      split($6, b, /,/)
       for (i in b) {
-        batch = sample_arr[b[i]]
-        print bincov_arr[batch] | bincov_out
-        print bincov_index_arr[batch] | bincov_index_out
-        print medians_arr[batch] | medians_out
+        Batches[Sample_arr[b[i]]
+      }
+    }
+    BEGINFILE {
+      if (ARGIND > 4) {
+        n = split(FILENAME, p, /\//)
+        Shard = p[n]
+        delete Batches
+      }
+    }
+    ENDFILE {
+      if (ARGIND > 4) {
+        batches_out = "batches/" Shard
+        bincovs_out = "bincov/" Shard
+        bincovs_idx_out = "bincov_index/" Shard
+        medians_out = "medians/" Shard
+        for (id in Batches) {
+          print id > batches_out
+          print Bincov_arr[id] > bincovs_out
+          print Bincov_index_arr[id] > bincovs_idx_out
+          print Medians_arr[id] > medians_out
+        }
+        close(batches_out)
+        close(bincovs_out)
+        close(bincovs_idx_out)
+        close(medians_out)
       }
     }' "${sample_table}" "${bincov_subset_map}" "${bincov_subset_index_map}" \
       "${medians_map}" shards/cnvs_*
   >>>
 
   output {
+    # Each shard will have the CNVs to plot and each other output with the
+    # same basename will have the list of files needed so it is critical
+    # that the relative ordering of the files from the glob is the same.
     Array[File] shards = glob("shards/cnvs_*")
+    Array[File] batches = glob("batches/cnvs_*")
     Array[File] bincov_paths = glob("bincov/cnvs_*")
     Array[File] bincov_index_paths = glob("bincov_index/cnvs_*")
     Array[File] medians_paths = glob("medians/cnvs_*")
@@ -355,7 +368,7 @@ task ShardVariants {
 task MakePlots {
   input {
     File variants
-    Array[String] sample_set_ids
+    File batches
     Array[File] bincov_files
     Array[File] bincov_index_files
     Array[File] medians_files
@@ -369,6 +382,7 @@ task MakePlots {
     + size(medians_files, "GB")
     + size(sample_table, "GB")
     + size(variants, "GB")
+    + size(batches, "GB")
   Float disk_size = input_size + variant_count * 0.01 + 16
 
   runtime {
@@ -386,7 +400,7 @@ task MakePlots {
     set -o nounset
     set -o pipefail
 
-    batch_ids='~{write_lines(sample_set_ids)}'
+    batch_ids='~{batches}'
     bincov_files='~{write_lines(bincov_files)}'
     medians_files='~{write_lines(medians_files)}'
     variants='~{variants}'

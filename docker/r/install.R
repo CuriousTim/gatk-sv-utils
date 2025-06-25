@@ -14,7 +14,7 @@ install <- function(x) {
         x[[1]],
         version = x[[2]],
         upgrade = "always",
-        repos = c("https://cloud.r-project.org"),
+        repos = c("https://cloud.r-project.org", "https://bioconductor.org/packages/3.21"),
         INSTALL_opts = c("--no-docs", "--no-html", "--no-data", "--no-help",
                          "--no-demo", "--without-keep.source"),
         Ncpus = NCPUS

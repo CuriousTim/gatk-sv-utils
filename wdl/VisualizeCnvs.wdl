@@ -322,7 +322,7 @@ task ShardVariants {
     ARGIND > 4 {
       split($6, b, /,/)
       for (i in b) {
-        Batches[Sample_arr[b[i]]
+        Batches[Sample_arr[b[i]]]
       }
     }
     BEGINFILE {

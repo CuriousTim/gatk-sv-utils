@@ -509,7 +509,7 @@ message("reading median paths")
 medians_map <- read_keyed_tsv(opts$medians_paths)
 dir.create(opts$output)
 
-for (i in nrow(records)) {
+for (i in seq_len(nrow(records))) {
     rec <- as.list(records[i, ])
     rec$samples_split <- strsplit(rec$samples, split = ",", fixed = TRUE)[[1]]
     message(sprintf("plotting '%s' (%s:%d-%d)", rec$vid, rec$chr, rec$start, rec$end))

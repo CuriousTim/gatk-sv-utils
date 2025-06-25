@@ -368,7 +368,7 @@ task MakePlots {
     + size(medians_files, "GB")
     + size(sample_table, "GB")
     + size(variants, "GB")
-  Float disk_size = input_size + variant_count * 0.01
+  Float disk_size = input_size + variant_count * 0.01 + 16
 
   runtime {
     bootDiskSizeGb: 8

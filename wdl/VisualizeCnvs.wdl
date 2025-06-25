@@ -275,6 +275,7 @@ task ShardVariants {
     + size(bincov_subset_map, "GB")
     + size(bincov_subset_index_map, "GB")
     + size(medians_map, "GB")
+    + 16
 
   runtime {
     bootDiskSizeGb: 8

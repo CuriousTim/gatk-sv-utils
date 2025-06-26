@@ -14,7 +14,7 @@ parser <- add_option(parser, c("-b", "--cnvs"), type = "character",
 # 2. batch ID
 parser <- add_option(parser, c("-s", "--sample-batches"), type = "character",
                      metavar = "<path>",
-                     help = "Mapping between batch ID and sample ID")
+                     help = "Mapping between batch ID and sample ID for every sample in the cohort")
 # File should be two tab-separated columns without a header
 # 1. batch ID
 # 2. path to coverage matrix
@@ -73,6 +73,8 @@ SMOOTH_WINDOW <- 21
 
 # number of intervals to plot
 INTERVAL_PLOT_COUNT <- 26L
+
+MAX_BACKGROUND_SAMPLES <- 500L
 
 # Packages -------------------------------------------------------------------
 
@@ -147,89 +149,82 @@ read_keyed_tsv <- function(path) {
     h
 }
 
-#' Parse rows from a coverage matrix.
+#' Retrieve the header of a bincov matrix.
 #'
-#' @param lines `character` Rows to parse. Each element of `lines` should be
-#'   the string of a row from the coverage matrix.
-#' @param query `GRanges` The single query interval used to retrieve `lines`.
-#' @param header `character` The header from the coverage matrix, split into
-#'   columns. It is assumed that `header` and `lines` come from the same
-#'   coverage matrix and that `header` contains "chr", "start", "end" as the
-#'   first three elements followed by all the sample IDs in the coverage
-#'   matrix.
-#' @param use_median `logical(1)` Compute median coverage?
-#' @returns `data.table` If `lines` is `NULL`, return `NULL`. If `lines` is
-#'   empty, return a one-row `data.table` of all `NA`. If `use_median` is
-#'   `FALSE`, return a `data.table` with one row per element in `lines`. If
-#'   `use_median` is `TRUE`, return a `data.table` with one row
-#'   containing the per sample coverage medians of the rows in `lines`.
-parse_tabix <- function(lines, query, header, use_median) {
-    if (is.null(lines)) {
-        return(NULL)
+#' @param con `TabixFile` Connection to matrix.
+#' @returns `character` Header of the matrix.
+bincov_header <- function(con) {
+    header <- headerTabix(con)[["header"]]
+    if (is.null(header)) {
+        stop(sprintf("coverage matrix at '%s' is missing a header", con$ath))
+    }
+    header <- strsplit(header, split = "\t", fixed = TRUE)[[1]]
+    if (length(header) <= 4 || !all(header[1:3] == c("#Chr", "Start", "End"))) {
+        stop(sprintf("coverage matrix at '%s' has an invalid header", con$path))
+    }
+    header[1:3] <- c("chr", "start", "end")
+
+    header
+}
+
+#' Query a bincov matrix.
+#'
+#' @param con `TabixFile` Connection to bincov matrix.
+#' @param header `character` The parsed header line from the bincov matrix.
+#'   Assumes the first three elements are "chr", "start", "end" and the
+#'   remaining elements are sample IDs.
+#' @param samples `character` Samples to keep.
+#' @param ranges `GRanges` Genomic ranges to check for overlap.
+#' @returns `data.table` The bincov matrix. If `ranges` contains a single
+#'   range, the overlapping bincov rows will be returned as is. Otherwise,
+#'   the median coverage of each sample for the bins overlapping each
+#'   range will be returned. Ranges without any overlapping bins will have
+#'   `NA` coverage values unless all ranges do not have any overlapping bins
+#'   in which case an error is signaled.
+query_bincov <- function(con, header, samples, ranges) {
+    tabix <- scanTabix(con, param = ranges)
+    if (all(lengths(tabix) == 0)) {
+        stop("no overlapping intervals in coverage matrix")
     }
 
-    coords <- list(chr = as.character(seqnames(query)),
-                   start = start(query),
-                   end = end(query))
-    if (length(lines) == 0) {
-        samples <- setNames(as.list(rep(NA_real_, length(header) - 3)), header[-(1:3)])
-        return(as.data.table(c(coords, samples)))
-    }
+    qcoords <- data.table(
+        qchr = as.character(seqnames(ranges)),
+        qstart = start(ranges),
+        qend = end(ranges)
+    )
 
     coltypes <- list("character" = 1L,
                      "integer" = c(2L, 3L),
                      "double" = seq.int(4, length(header)))
-    d <- fread(text = lines, sep = "\t", header = FALSE,
-                col.names = header, colClasses = coltypes)
-    # convert from 0-start, exclusive to 1-start, inclusive
-    d[, start := start + 1L]
-
-    if (!use_median) {
-        return(d)
+    cols_to_keep <- which(header %in% samples)
+    samples_to_keep <- header[cols_to_keep]
+    parse <- function(qchr, qstart, qend, lines) {
+        if (length(lines) == 0) {
+            return(NULL)
+        }
+        d <- fread(text = lines, sep = "\t", header = FALSE,
+                   colClasses = coltypes, select = c(1:3, cols_to_keep))
+        colnames(d) <- c("chr", "start", "end", samples_to_keep)
+        # convert from 0-start, exclusive to 1-start, inclusive
+        d[, start := start + 1L]
+        d[, c("qchr", "qstart", "qend") := list(qchr, qstart, qend)]
+        d
     }
 
-    s <- d[, lapply(.SD, median), .SDcols = header[-(1:3)]]
-    s[, c("chr", "start", "end") := coords]
+    mat <- mapply(parse, qcoords$qchr, qcoords$qstart, qcoords$qend, tabix, SIMPLIFY = FALSE, USE.NAMES = FALSE) |>
+        rbindlist(use.names = TRUE)
 
-    s
-}
-
-#' Retrieve the intervals of a coverage matrix overlapping some intervals.
-#'
-#' @param path `character(1)` Path to the coverage matrix.
-#' @param ranges `GRanges` Query intervals.
-#' @returns `data.table` The portion of the coverage matrix overlapping the
-#'   query intervals.
-get_coverage_mat <- function(path, ranges) {
-    tabix_con <- TabixFile(path)
-    open(tabix_con)
-    on.exit(close(tabix_con), add = TRUE, after = FALSE)
-
-    header <- headerTabix(tabix_con)[["header"]]
-    if (is.null(header)) {
-        stop(sprintf("coverage matrix at '%s' is missing a header", path))
+    # a single range indicates the query region is the span of the CNV while multiple regions
+    # indicates interval sampling
+    if (length(ranges) > 1) {
+        mat <- mat[qcoords, on = c("qchr", "qstart", "qend")]
+        # each query interval result should be an NA row, or not have any NA rows so computing
+        # median without na.rm is ok
+        mat <- mat[, lapply(.SD, median), .SDcols = samples_to_keep, by = c("qchr", "qstart", "qend")]
+        setnames(mat, colnames(qcoords), c("chr", "start", "end"))
+    } else {
+        mat[, c("qchr", "qstart", "qend") := list(NULL)]
     }
-    header <- strsplit(header, split = "\t", fixed = TRUE)[[1]]
-    if (length(header) <= 4 || !all(header[1:3] == c("#Chr", "Start", "End"))) {
-        stop(sprintf("coverage matrix at '%s' has an invalid header", path))
-    }
-    header[1:3] <- c("chr", "start", "end")
-
-    rows <- scanTabix(tabix_con, param = ranges)
-    if (all(lengths(rows) == 0)) {
-        stop("no overlapping intervals in coverage matrix")
-    }
-
-    # If there is only range, then it must be the entire span of the CNV,
-    # otherwise the ranges are interval samples. This assumption is fine because
-    # the large CNV size, number of interval samples, and the sampling window
-    # size are all hardcoded.
-    use_median <- length(ranges) > 1
-    mat <- mapply(parse_tabix,
-                  rows, as(ranges, "GRangesList"),
-                  MoreArgs = list(header = header, use_median = use_median),
-                  SIMPLIFY = FALSE, USE.NAMES = FALSE) |>
-        rbindlist()
     setkey(mat, chr, start, end)
 
     mat
@@ -261,12 +256,15 @@ read_medians <- function(paths) {
 #' @param medians `double` Genome-wide median coverage for each sample in `x`.
 #' @param `data.table` Normalized coverage matrix.
 normalize_cov <- function(x, medians) {
-    cols <- colnames(x)
-    ids <- cols[!cols %in% c("chr", "start", "end")]
-    if (!setequal(ids, names(medians))) {
-        stop("sample IDs in coverage matrix do not match IDs in medians")
+    cov_cols <- colnames(x)
+    cov_samples <- cov_cols[!cov_cols %in% c("chr", "start", "end")]
+    medians_samples <- names(medians)
+    common_samples <- intersect(cov_samples, medians_samples)
+    if (length(cov_samples) != length(common_samples)) {
+        stop("some samples in coverage matrix do not have a median coverage")
     }
 
+    medians <- medians[common_samples]
     x[, names(.SD) := mapply(`/`, .SD, medians, SIMPLIFY = FALSE, USE.NAMES = FALSE), .SDcols = names(medians)]
 
     x
@@ -313,16 +311,6 @@ select_spaced_intervals <- function(n) {
     cumsum(steps)
 }
 
-has_consecutive_values <- function(x) {
-    if (length(x) < 2) {
-        return(FALSE)
-    }
-
-    a <- which(!is.na(x))
-
-    return(any(diff(a) == 1))
-}
-
 rollmean <- function(x) {
     n <- length(x)
     if (n < SMOOTH_WINDOW) {
@@ -335,7 +323,8 @@ rollmean <- function(x) {
     b <- vapply(seq(SMOOTH_WINDOW - 1, partial),
                 \(y) mean(x[(n - y + 1):n], na.rm = TRUE),
                 double(1))
-    m <- as.vector(filter(x, rep(1 / SMOOTH_WINDOW, SMOOTH_WINDOW), sides = 2))
+    # using algo = "fast" makes NA propagate even with na.rm = TRUE
+    m <- frollmean(x, SMOOTH_WINDOW, algo = "exact", align = "center", na.rm = TRUE)
     m[1:(partial - 1)] <- a
     m[(n - partial + 2):n] <- b
 
@@ -354,26 +343,29 @@ load_cnv_coverage <- function(cnv, paths) {
         ranges <- GRanges(cnv$chr, IRanges(cnv$start, cnv$end))
     }
 
-    mats <- lapply(paths, \(x) get_coverage_mat(x, ranges))
-    if (length(mats) > 1) {
-        # All of the coverage matrices should have the same intervals,
-        # we merge just to be safe. This requires that `setkey()` be
-        # called for every matrix.
-        mats <- Reduce(merge, mats)
-    } else {
-        mats <- mats[[1]]
-    }
+    cons <- TabixFileList(paths)
+    headers <- lapply(cons, bincov_header)
+    all_samples <- lapply(headers, \(x) x[-(1:3)]) |> unlist() |> unique()
+    bg_samples <- all_samples[!all_samples %in% cnv$samples_split]
+    bg_samples <- sample(bg_samples, min(MAX_BACKGROUND_SAMPLES, length(bg_samples)))
+    keep_samples <- c(cnv$samples_split, bg_samples)
+
+    mats <- mapply(query_bincov, cons, headers,
+                   MoreArgs = list(samples = keep_samples, ranges = ranges),
+                   SIMPLIFY = FALSE,
+                   USE.NAMES = FALSE)
+
+    # All of the coverage matrices should have the same intervals,
+    # we merge just to be safe. This requires that `setkey()` be
+    # called for every data.table.
+    mats <- Reduce(merge, mats)
 
     if (nrow(mats) == 1) {
         stop("CNV must overlap at least two coverage intervals")
     }
 
-    if (!all(mats[, vapply(.SD, has_consecutive_values, logical(1)), .SDcols = !patterns("chr|start|end")])) {
-        stop("every sample must have at least two consecutive coverage values")
-    }
-
     if (!all(cnv$samples_split %in% colnames(mats))) {
-        stop("carrier samples are missing from the coverage matrices")
+        stop("carrier samples are missing from the coverage matrix")
     }
 
     mats
@@ -396,18 +388,33 @@ pretty_cnv_size <- function(cnv) {
     size_pretty
 }
 
+plot_singleton_intervals <- function(x, mids, col, cex) {
+    idx <- which(!is.na(x))
+    na_idx <- which(is.na(x))
+    na_after <- idx[(idx + 1) %in% na_idx]
+    na_before <- idx[(idx - 1) %in% na_idx]
+    singleton_idx <- sort(intersect(na_after, na_before))
+    points(mids[singleton_idx], x[singleton_idx], cex = cex, pch = 19, col = col)
+
+    # Handle intervals at the start and end of vector
+    if (length(x) < 2) {
+        return()
+    }
+    if (!is.na(x[[1]]) && is.na(x[[2]])) {
+        points(mids[[1]], x[[1]], cex = cex, pch = 19, col = col)
+    }
+    if (!is.na(x[[length(x)]]) && is.na(x[[length(x) - 1]])) {
+        points(mids[[length(mids)]], x[[length(x)]], cex = cex, pch = 19, col = col)
+    }
+}
+
 #' Plot coverage over a CNV region.
 #'
 #' @param cnv `list` Information of the CNV.
-#' @param norm_cov `data.table` Normalized coverage matrix for the CNV region.
+#' @param norm_cov `data.table` Normalized coverage matrix for the CNV region. Should be smoothed
+#'   and sampled.
 #' @param outfile The path to the plot.
 make_plot <- function(cnv, norm_cov, outfile) {
-    # smooth
-    norm_cov[, names(.SD) := lapply(.SD, rollmean), .SDcols = !patterns("chr|start|end")]
-
-    # sample intervals to reduce noise
-    norm_cov <- norm_cov[select_spaced_intervals(.N), ]
-
     # make plot main
     size_pretty <- pretty_cnv_size(cnv)
     start_pretty <- formatC(cnv$cnv_start, big.mark = ",", format = "d")
@@ -421,12 +428,12 @@ make_plot <- function(cnv, norm_cov, outfile) {
                     cnv$chr, start_pretty, end_pretty, samples_pretty, size_pretty)
 
     mids <- norm_cov$start + floor((norm_cov$end - norm_cov$start + 1) / 2)
-    bg_samples <- colnames(norm_cov)[!colnames(norm_cov) %in% c("chr", "start", "end", cnv$samples_split)]
     xlim <- c(min(norm_cov$start), max(norm_cov$end))
     jpeg(outfile, res = 300, width = 1800, height = 1800)
     old_par <- par(no.readonly = TRUE)
     on.exit(par(old_par))
     par(mar = c(6.1, 4.1, 4.1, 2.1))
+    cnv_col <- if (cnv$svtype == "DEL") "red" else "blue"
     # plot background
     matplot(mids, as.matrix(norm_cov[, .SD, .SDcols = !patterns("chr|start|end")]),
             type = "l", lty = 1, col = "grey", lwd = 0.5,
@@ -439,7 +446,16 @@ make_plot <- function(cnv, norm_cov, outfile) {
     # plot carriers
     matlines(mids, as.matrix(norm_cov[, .SD, .SDcols = cnv$samples_split]),
              lty = 1, lwd = 2,
-             col = ifelse(cnv$svtype == "DEL", "red", "blue"))
+             col = cnv_col)
+    # lonely intervals - background
+    bg_samples <- colnames(norm_cov)[!colnames(norm_cov) %in% c("chr", "start", "end", cnv$samples_split)]
+    for (bg in norm_cov[, .SD, .SDcols = bg_samples]) {
+        plot_singleton_intervals(bg, mids, "grey", 0.5)
+    }
+    # lonely intervals - carriers
+    for (fg in norm_cov[, .SD, .SDcols = cnv$samples_split]) {
+        plot_singleton_intervals(fg, mids, cnv_col, 2)
+    }
     # add padding indicators
     ylim <- par("usr")[3:4]
     rect(xlim[[1]], ylim[[1]], cnv$cnv_start, ylim[[2]], col = "#FFAF0044", border = NA)
@@ -494,6 +510,12 @@ visualize <- function(cnv, bincov_map, medians_map, sample_map, outdir) {
     }
     medians <- read_medians(medians_paths)
     norms <- normalize_cov(coverage, medians)
+
+    # smooth
+    norms[, names(.SD) := lapply(.SD, rollmean), .SDcols = !patterns("chr|start|end")]
+
+    # sample intervals to reduce noise
+    norms <- norms[select_spaced_intervals(.N), ]
 
     plot_path <- make_plot_path(cnv, outdir)
     make_plot(cnv, norms, plot_path)

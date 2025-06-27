@@ -19,20 +19,19 @@ workflow VisualizeCnvs {
   }
 
   scatter (vcf in vcfs) {
-    call ExtractVariants {
+    call ExtractCnvs {
       input:
         vcf = vcf,
-        sample_table = sample_table,
         min_size = min_size,
-        variants_per_shard = variants_per_shard,
         base_docker = base_docker
     }
   }
 
-  call MergeIntervals {
+  call MakeBincovQueryManifests {
     input:
-      intervals = flatten(ExtractVariants.intervals),
-      base_docker = base_docker
+      cnvs = ExtractCnvs.cnvs,
+      sample_table = sample_table,
+      r_docker = r_docker
   }
 
   call MapFromArrays as MakeBincovMap {
@@ -49,31 +48,6 @@ workflow VisualizeCnvs {
       base_docker = base_docker
   }
 
-  scatter (f in MergeIntervals.merged_intervals) {
-    String batch = basename(f)
-    call SubsetBincovMatrix {
-      input:
-        intervals = f,
-        bincov = MakeBincovMap.m[batch],
-        bincov_index = MakeBincovIndexMap.m[batch],
-        base_docker = base_docker
-    }
-  }
-
-  call MapFromArrays as MakeBincovSubsetMap {
-    input:
-      keys = SubsetBincovMatrix.batch,
-      values = SubsetBincovMatrix.bincov_subset,
-      base_docker = base_docker
-  }
-
-  call MapFromArrays as MakeBincovSubsetIndexMap {
-    input:
-      keys = SubsetBincovMatrix.batch,
-      values = SubsetBincovMatrix.bincov_subset_index,
-      base_docker = base_docker
-  }
-
   call MapFromArrays as MakeMediansMap {
     input:
       keys = sample_set_ids,
@@ -81,14 +55,32 @@ workflow VisualizeCnvs {
       base_docker = base_docker
   }
 
+  scatter (f in MakeBincovQueryManifests.manifests) {
+    String batch = basename(f, ".rdx")
+    call SubsetBincovMatrix {
+      input:
+        batch = batch,
+        manifest = f,
+        bincov = MakeBincovMap.m[batch],
+        bincov_index = MakeBincovIndexMap.m[batch],
+        medians = MakeMediansMap.m[batch],
+        r_docker = r_docker
+    }
+  }
+
+  call MapFromArrays as MakeBincovSubsetMap {
+    input:
+      keys = SubsetBincovMatrix.batch_out,
+      values = SubsetBincovMatrix.subsets,
+      base_docker = base_docker
+  }
+
   call ShardVariants {
     input:
-      variants = ExtractVariants.variants,
+      variants = MakeBincovQueryManifests.merged_cnvs,
       sample_table = sample_table,
       variants_per_shard = variants_per_shard,
       bincov_subset_map = write_map(MakeBincovSubsetMap.m),
-      bincov_subset_index_map = write_map(MakeBincovSubsetIndexMap.m),
-      medians_map = write_map(MakeMediansMap.m),
       base_docker = base_docker
   }
 
@@ -97,9 +89,7 @@ workflow VisualizeCnvs {
       input:
         variants = ShardVariants.shards[i],
         batches = ShardVariants.batches[i],
-        bincov_files = read_lines(ShardVariants.bincov_paths[i]),
-        bincov_index_files= read_lines(ShardVariants.bincov_index_paths[i]),
-        medians_files = read_lines(ShardVariants.medians_paths[i]),
+        bincov_tars = read_lines(ShardVariants.bincov_paths[i]),
         sample_table = sample_table,
         r_docker = r_docker
     }
@@ -117,16 +107,14 @@ workflow VisualizeCnvs {
   }
 }
 
-task ExtractVariants {
+task ExtractCnvs {
   input {
     File vcf
     Int min_size
-    Int variants_per_shard
-    File sample_table
     String base_docker
   }
 
-  Float disk_size = size([vcf, sample_table], "GB") * 3 + 16
+  Float disk_size = size(vcf, "GB") * 3 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -145,45 +133,33 @@ task ExtractVariants {
 
     vcf='~{vcf}'
     min_size='~{min_size}'
-    variants_per_shard='~{variants_per_shard}'
-    sample_table='~{sample_table}'
 
     bcftools query --include "(SVTYPE == \"DEL\" || SVTYPE == \"DUP\") & FILTER ~ \"PASS\" & SVLEN >= ${min_size} & GT ~ \"1\"" \
       --format '%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/SVTYPE\t[%SAMPLE,]\n' "${vcf}" \
       | awk -F'\t' '{sub(/,$/, "", $6); print}' OFS='\t' > cnvs.tsv
-
-    mkdir intervals
-    awk -F'\t' 'BEGIN{OFS="\t"}
-    ARGIND == 1{a[$1]=$2}
-    ARGIND == 2{
-      split($6, b, /,/);
-      for (i in b) {
-        print $1,$2 - 1,$3 > ("intervals/" a[b[i]])
-      }
-    }' "${sample_table}" cnvs.tsv
   >>>
 
   output {
-    File variants = "cnvs.tsv"
-    Array[File] intervals = glob("intervals/*")
+    File cnvs = "cnvs.tsv"
   }
 }
 
-task MergeIntervals {
+task MakeBincovQueryManifests {
   input {
-    Array[File] intervals
-    String base_docker
+    Array[File] cnvs
+    File sample_table
+    String r_docker
   }
 
-  Float disk_size = size(intervals, "GB") * 3 + 16
+  Float disk_size = (size(cnvs, "GB") + size(sample_table, "GB")) * 3 + 30
 
   runtime {
     bootDiskSizeGb: 8
     cpu: 1
     disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: base_docker
+    docker: r_docker
     maxRetries: 1
-    memory: "1 GiB"
+    memory: "4 GiB"
     preemptible: 3
   }
 
@@ -192,89 +168,82 @@ task MergeIntervals {
     set -o nounset
     set -o pipefail
 
-    intervals='~{write_lines(intervals)}'
+    cnvs='~{write_lines(cnvs)}'
+    sample_table='~{sample_table}'
 
-    mkdir intervals
-    while read -r f; do
-      batch="$(basename "${f}")"
-      cat "${f}" >> "intervals/${batch}"
-    done < "${intervals}"
+    cat "${cnvs}" | xargs cat > merged_cnvs.tsv
 
-    mkdir merged_intervals
-    for f in intervals/*; do
-      batch="$(basename "${f}")"
-      awk -F'\t' '{s=$3 - $2; pad=int(s / 2) + 1; min=$2 - pad; $2=min < 0 ? 0 : min; $3+=pad} 1' OFS='\t' "${f}" \
-        | sort -k1,1 -k2,2n \
-        | bedtools merge -i stdin -d 101 \
-        | awk -F'\t' '{$2+=1} 1' OFS='\t' > "merged_intervals/${batch}"
-    done
+    mkdir manifests
+    Rscript /opt/gatk-sv-utils/scripts/batch_variants.R merged_cnvs.tsv \
+      "${sample_table}" manifests
   >>>
 
   output {
-    Array[File] merged_intervals = glob("merged_intervals/*")
+    File merged_cnvs = "merged_cnvs.tsv"
+    Array[File] manifests = glob("manifests/*.rdx")
   }
 }
 
 task SubsetBincovMatrix {
   input {
+    String batch
+    File manifest
     File bincov
     File bincov_index
-    File intervals
-    String base_docker
+    File medians
+    File r_docker
   }
 
-  Float disk_size = size(bincov, "GB") * 2 + 16
+  Float disk_size = size(bincov, "GB") * 2
+    + size(manifest, "GB")
+    + size(medians, "GB")
+    + 16
 
   runtime {
     bootDiskSizeGb: 8
     cpu: 2
     disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: base_docker
+    docker: r_docker
     maxRetries: 1
     memory: "4 GiB"
     preemptible: 2
   }
-
-  String intervals_bn = basename(intervals)
-  String output_name = intervals_bn + ".gz"
 
   command <<<
     set -o errexit
     set -o nounset
     set -o pipefail
 
-    intervals='~{intervals}'
+    batch='~{batch}'
+    manifest='~{manifest}'
     bincov='~{bincov}'
-    bincov_subset='~{output_name}'
+    medians='~{medians}'
 
-    tabix --print-header --regions "${intervals}" "${bincov}" \
-      | bgzip > "${bincov_subset}"
-    tabix --zero-based --begin 2 --comment '#' --end 3 --sequence 1 "${bincov_subset}"
+    mkdir "${batch}"
+    Rscript /opt/gatk-sv-utils/scripts/subset_bincov.R "${manifest}" \
+      "${bincov}" "${medians}" "${batch}"
+
+    tar -cvf "${batch}.tar" "${batch}"
   >>>
 
   output {
-    String batch = intervals_bn
-    File bincov_subset = output_name
-    File bincov_subset_index = output_name + ".tbi"
+    String batch_out = batch
+    File subsets = batch + ".tar"
   }
 }
 
 task ShardVariants {
   input {
-    Array[File] variants
+    File variants
     File sample_table
     Int variants_per_shard
     File bincov_subset_map
-    File bincov_subset_index_map
-    File medians_map
     String base_docker
   }
 
   Float disk_size = size(variants, "GB") * 3
     + size(sample_table, "GB")
     + size(bincov_subset_map, "GB")
-    + size(bincov_subset_index_map, "GB")
-    + size(medians_map, "GB")
     + 16
 
   runtime {
@@ -292,16 +261,13 @@ task ShardVariants {
     set -o nounset
     set -o pipefail
 
-    variants='~{write_lines(variants)}'
+    variants='~{variants}'
     sample_table='~{sample_table}'
     variants_per_shard=~{variants_per_shard}
     bincov_subset_map='~{bincov_subset_map}'
-    bincov_subset_index_map='~{bincov_subset_index_map}'
-    medians_map='~{medians_map}'
 
-    cat "${variants}" | xargs cat > merged_cnvs.tsv
-    mkdir shards batches bincov bincov_index medians
-    split -l "${variants_per_shard}" merged_cnvs.tsv shards/cnvs_
+    mkdir shards batches bincov
+    split -l "${variants_per_shard}" "${variants}" shards/cnvs_
 
     # The order of the batch ids in the list for each shard must match the
     # order in the lists of the other data files or the batches could
@@ -313,13 +279,7 @@ task ShardVariants {
     ARGIND == 2 {
       Bincov_arr[$1] = $2
     }
-    ARGIND == 3 {
-      Bincov_index_arr[$1] = $2
-    }
-    ARGIND == 4 {
-      Medians_arr[$1] = $2
-    }
-    ARGIND > 4 {
+    ARGIND > 3 {
       split($6, b, /,/)
       for (i in b) {
         Batches[Sample_arr[b[i]]]
@@ -336,21 +296,14 @@ task ShardVariants {
       if (ARGIND > 4) {
         batches_out = "batches/" Shard
         bincovs_out = "bincov/" Shard
-        bincovs_idx_out = "bincov_index/" Shard
-        medians_out = "medians/" Shard
         for (id in Batches) {
           print id > batches_out
           print Bincov_arr[id] > bincovs_out
-          print Bincov_index_arr[id] > bincovs_idx_out
-          print Medians_arr[id] > medians_out
         }
         close(batches_out)
         close(bincovs_out)
-        close(bincovs_idx_out)
-        close(medians_out)
       }
-    }' "${sample_table}" "${bincov_subset_map}" "${bincov_subset_index_map}" \
-      "${medians_map}" shards/cnvs_*
+    }' "${sample_table}" "${bincov_subset_map}" shards/cnvs_*
   >>>
 
   output {
@@ -360,8 +313,6 @@ task ShardVariants {
     Array[File] shards = glob("shards/cnvs_*")
     Array[File] batches = glob("batches/cnvs_*")
     Array[File] bincov_paths = glob("bincov/cnvs_*")
-    Array[File] bincov_index_paths = glob("bincov_index/cnvs_*")
-    Array[File] medians_paths = glob("medians/cnvs_*")
   }
 }
 
@@ -369,17 +320,13 @@ task MakePlots {
   input {
     File variants
     File batches
-    Array[File] bincov_files
-    Array[File] bincov_index_files
-    Array[File] medians_files
+    Array[File] bincov_tars
     File sample_table
     String r_docker
   }
 
   Int variant_count = length(read_lines(variants))
-  Float input_size = size(bincov_files, "GB")
-    + size(bincov_index_files, "GB")
-    + size(medians_files, "GB")
+  Float input_size = size(bincov_tars, "GB") * 2
     + size(sample_table, "GB")
     + size(variants, "GB")
     + size(batches, "GB")
@@ -387,11 +334,11 @@ task MakePlots {
 
   runtime {
     bootDiskSizeGb: 8
-    cpu: 4
+    cpu: 2
     disks: "local-disk ${ceil(disk_size)} HDD"
     docker: r_docker
     maxRetries: 1
-    memory: "8 GiB"
+    memory: "4 GiB"
     preemptible: 3
   }
 
@@ -400,23 +347,21 @@ task MakePlots {
     set -o nounset
     set -o pipefail
 
-    batch_ids='~{batches}'
-    bincov_files='~{write_lines(bincov_files)}'
-    medians_files='~{write_lines(medians_files)}'
     variants='~{variants}'
+    batches='~{batches}'
+    bincov_tars='~{write_lines(bincov_tars)}'
     sample_table='~{sample_table}'
 
-    paste "${batch_ids}" "${bincov_files}" > bincov_map.tsv
-    paste "${batch_ids}" "${medians_files}" > medians_map.tsv
+    paste "${batches}" <(sed 's/\.tar$//' "${bincov_tars}") > bincov_map.tsv
+    cat "${bincov_tars}" | xargs -I'{}' tar -xf '{}'
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_cnvs.R \
-      --cnvs "${variants}" \
-      --sample-batches "${sample_table}" \
-      --coverage-paths bincov_map.tsv \
-      --medians-paths medians_map.tsv \
-      --output plots
+      "${variants}"
+      "${sample_table}"
+      bincov_map.tsv
+      plots
 
-    tar -czf plots.tar.gz plots
+    tar -cvzf plots.tar.gz plots
   >>>
 
   output {

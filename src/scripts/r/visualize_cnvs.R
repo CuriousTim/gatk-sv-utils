@@ -1,72 +1,8 @@
-#!/usr/bin/env Rscript
-
-library(optparse)
-
-# Options parsing ------------------------------------------------------------
-parser <- OptionParser()
-
-# See `read_cnvs()`
-parser <- add_option(parser, c("-b", "--cnvs"), type = "character",
-                     metavar = "<path>",
-                     help = "File with CNVs to plot")
-# File should be two tab-separated columns without a header
-# 1. sample ID
-# 2. batch ID
-parser <- add_option(parser, c("-s", "--sample-batches"), type = "character",
-                     metavar = "<path>",
-                     help = "Mapping between batch ID and sample ID for every sample in the cohort")
-# File should be two tab-separated columns without a header
-# 1. batch ID
-# 2. path to coverage matrix
-parser <- add_option(parser, c("-d", "--coverage-paths"), type = "character",
-                     metavar = "<path>",
-                     help = "Mapping between batch ID and coverage matrix")
-# File should be two tab-separated columns without a header
-# 1. batch ID
-# 2. path to coverage medians
-parser <- add_option(parser, c("-m", "--medians-paths"), type = "character",
-                     metavar = "<path>",
-                     help = "Mapping between batch ID and coverage medians")
-parser <- add_option(parser, c("-o", "--output"), type = "character",
-                     metavar = "<path>",
-                     help = "Path to output directory")
-
-opts <- parse_args(parser, convert_hyphens_to_underscores = TRUE)
-if (is.null(opts$cnvs)) {
-    stop("-b,--cnvs is required")
-}
-if (is.null(opts$sample_batches)) {
-    stop("-s,--sample-batches is required")
-}
-if (is.null(opts$coverage_paths)) {
-    stop("-d,--coverage-paths is required")
-}
-if (is.null(opts$medians_paths)) {
-    stop("-m,--medians-paths is required")
-}
-if (is.null(opts$output)) {
-    stop("-o,--output is required")
-}
+# Usage: Rscript visualize_cnvs.R <cnvs> <sample_table> <batch_dir_paths> <outdir>
+#
+# Plot CNVs
 
 # Constants -------------------------------------------------------------------
-
-# The intervals in the bincov matrices are 100 bp so the matrices large CNVs
-# take up a lot of memory. For these CNVs, we sample the median coverage at
-# equally spaced windows across the SV and plot the samples.
-
-# number of samples to take
-LARGE_CNV_SAMPLE_COUNT <- 500L
-# size of the sampling window
-LARGE_CNV_SAMPLE_WINDOW_SIZE <- 2000L
-# minimum CNV size to use sampling strategy
-LARGE_CNV_SIZE <- LARGE_CNV_SAMPLE_COUNT * LARGE_CNV_SAMPLE_WINDOW_SIZE
-
-# Seeing the coverage upstream and downstream of the CNV is useful for
-# determining whether the breakpoints are accurate so we add some padding
-# to the CNV when plotting.
-
-# Fraction of CNV length to add to the CNV as padding
-PAD_EXPANSION_FACTOR <- 0.5
 
 # must be odd
 SMOOTH_WINDOW <- 21
@@ -74,15 +10,12 @@ SMOOTH_WINDOW <- 21
 # number of intervals to plot
 INTERVAL_PLOT_COUNT <- 26L
 
-MAX_BACKGROUND_SAMPLES <- 500L
-
-# Packages -------------------------------------------------------------------
-
-suppressPackageStartupMessages(library(Rsamtools))
-suppressPackageStartupMessages(library(GenomicRanges))
-suppressPackageStartupMessages(library(data.table))
-
 # Functions ------------------------------------------------------------------
+
+usage <- function(con) {
+    cat("usage: Rscript visualize_cnvs.R <cnvs> <sample_table> <batch_tars_table> <outdir>\n",
+        file = con)
+}
 
 #' Read the CNVs to plot.
 #'
@@ -97,28 +30,41 @@ suppressPackageStartupMessages(library(data.table))
 #' @param path `character(1)` Path to the file.
 #' @returns `data.table` The table in `path`.
 read_cnvs <- function(path) {
+    stopifnot("CNVs path must be a string" = is.character(path) && length(path) == 1L)
     cnvs <- fread(path, sep = "\t", header = FALSE,
                   col.names = c("chr", "start", "end", "vid", "svtype", "samples"),
                   colClasses = c("character", "integer", "integer", "character",
                                  "character", "character"))
     if (nrow(cnvs) == 0) {
-        stop("no variants to plot")
+        stop("no variants found")
     }
 
-    if (!all(cnvs$end >= cnvs$start)) {
-        stop("all CNV ends must be greater than or equal to starts")
+    if (any(is.na(c(cnvs$start, cnvs$end)))) {
+        stop("CNV coordinates must not be `NA`")
+    }
+
+    if (!all(cnvs$start <= cnvs$end)) {
+        stop("CNV start must be less than or equal to end")
     }
 
     if (!all(grepl("DEL|DUP", cnvs$svtype))) {
-        stop("only DELs and DUPs can be plotted")
+        stop("only DEL and DUP SV types are allowed")
     }
 
     if (!all(nzchar(cnvs$vid))) {
         stop("all variant IDs must be non-empty")
     }
 
+    if (anyDuplicated(cnvs$vid) != 0) {
+        stop("variant IDs must be unique")
+    }
+
     if (any(grepl(.Platform$file.sep, cnvs$vid, fixed = TRUE))) {
         stop("variant IDs must not contain path separators")
+    }
+
+    if (!all(nzchar(cnvs$samples))) {
+        stop("all sample IDs must be non-empty")
     }
 
     cnvs
@@ -149,152 +95,6 @@ read_keyed_tsv <- function(path) {
     h
 }
 
-#' Retrieve the header of a bincov matrix.
-#'
-#' @param con `TabixFile` Connection to matrix.
-#' @returns `character` Header of the matrix.
-bincov_header <- function(con) {
-    header <- headerTabix(con)[["header"]]
-    if (is.null(header)) {
-        stop(sprintf("coverage matrix at '%s' is missing a header", con$ath))
-    }
-    header <- strsplit(header, split = "\t", fixed = TRUE)[[1]]
-    if (length(header) <= 4 || !all(header[1:3] == c("#Chr", "Start", "End"))) {
-        stop(sprintf("coverage matrix at '%s' has an invalid header", con$path))
-    }
-    header[1:3] <- c("chr", "start", "end")
-
-    header
-}
-
-#' Query a bincov matrix.
-#'
-#' @param con `TabixFile` Connection to bincov matrix.
-#' @param header `character` The parsed header line from the bincov matrix.
-#'   Assumes the first three elements are "chr", "start", "end" and the
-#'   remaining elements are sample IDs.
-#' @param samples `character` Samples to keep.
-#' @param ranges `GRanges` Genomic ranges to check for overlap.
-#' @returns `data.table` The bincov matrix. If `ranges` contains a single
-#'   range, the overlapping bincov rows will be returned as is. Otherwise,
-#'   the median coverage of each sample for the bins overlapping each
-#'   range will be returned. Ranges without any overlapping bins will have
-#'   `NA` coverage values unless all ranges do not have any overlapping bins
-#'   in which case an error is signaled.
-query_bincov <- function(con, header, samples, ranges) {
-    tabix <- scanTabix(con, param = ranges)
-    if (all(lengths(tabix) == 0)) {
-        stop("no overlapping intervals in coverage matrix")
-    }
-
-    qcoords <- data.table(
-        qchr = as.character(seqnames(ranges)),
-        qstart = start(ranges),
-        qend = end(ranges)
-    )
-
-    coltypes <- list("character" = 1L,
-                     "integer" = c(2L, 3L),
-                     "double" = seq.int(4, length(header)))
-    cols_to_keep <- which(header %in% samples)
-    samples_to_keep <- header[cols_to_keep]
-    parse <- function(qchr, qstart, qend, lines) {
-        if (length(lines) == 0) {
-            return(NULL)
-        }
-        d <- fread(text = lines, sep = "\t", header = FALSE,
-                   colClasses = coltypes, select = c(1:3, cols_to_keep))
-        colnames(d) <- c("chr", "start", "end", samples_to_keep)
-        # convert from 0-start, exclusive to 1-start, inclusive
-        d[, start := start + 1L]
-        d[, c("qchr", "qstart", "qend") := list(qchr, qstart, qend)]
-        d
-    }
-
-    mat <- mapply(parse, qcoords$qchr, qcoords$qstart, qcoords$qend, tabix, SIMPLIFY = FALSE, USE.NAMES = FALSE) |>
-        rbindlist(use.names = TRUE)
-
-    # a single range indicates the query region is the span of the CNV while multiple regions
-    # indicates interval sampling
-    if (length(ranges) > 1) {
-        mat <- mat[qcoords, on = c("qchr", "qstart", "qend")]
-        # each query interval result should be an NA row, or not have any NA rows so computing
-        # median without na.rm is ok
-        mat <- mat[, lapply(.SD, median), .SDcols = samples_to_keep, by = c("qchr", "qstart", "qend")]
-        setnames(mat, colnames(qcoords), c("chr", "start", "end"))
-    } else {
-        mat[, c("qchr", "qstart", "qend") := list(NULL)]
-    }
-    setkey(mat, chr, start, end)
-
-    mat
-}
-
-#' Read coverage medians files into a named vector.
-#'
-#' @param paths `character` Paths to the coverage medians files.
-#' @returns `double` The coverage medians. The names of the vector are the
-#'   sample IDs.
-read_medians <- function(paths) {
-    input <- lapply(paths, \(x) readLines(x, n = 2L, ok = FALSE))
-    ids <- unlist(strsplit(unlist(lapply(input, \(x) x[[1]])), split = "\t", fixed = TRUE))
-    medians <- strsplit(unlist(lapply(input, \(x) x[[2]])), split = "\t", fixed = TRUE) |>
-        unlist() |>
-        as.double()
-
-    names(medians) <- ids
-
-    medians
-}
-
-#' Normalize coverage values.
-#'
-#' Normalization is done by dividing each sample's coverage values by the
-#' genome-wide median coverage of the sample.
-#'
-#' @param x `data.table` Coverage matrix.
-#' @param medians `double` Genome-wide median coverage for each sample in `x`.
-#' @param `data.table` Normalized coverage matrix.
-normalize_cov <- function(x, medians) {
-    cov_cols <- colnames(x)
-    cov_samples <- cov_cols[!cov_cols %in% c("chr", "start", "end")]
-    medians_samples <- names(medians)
-    common_samples <- intersect(cov_samples, medians_samples)
-    if (length(cov_samples) != length(common_samples)) {
-        stop("some samples in coverage matrix do not have a median coverage")
-    }
-
-    medians <- medians[common_samples]
-    x[, names(.SD) := mapply(`/`, .SD, medians, SIMPLIFY = FALSE, USE.NAMES = FALSE), .SDcols = names(medians)]
-
-    x
-}
-
-#' Tile the region of a CNV with equally spaced windows.
-#'
-#' The first window always begins at the start of the CNV and the last window
-#' always ends at the end of the CNV. The intervening windows will be equally
-#' spaced with excess gaps being distributed from back to front. Depends on
-#' the LARGE_CNV_* constants being what they are.
-#'
-#' @param cnv `list` Information of the CNV to tile.
-#' @returns `GRanges` Ranges of the windows.
-tile_cnv <- function(cnv) {
-    gaps <- LARGE_CNV_SAMPLE_COUNT - 1L
-    total_gap_size <- cnv$end - cnv$start + 1L - LARGE_CNV_SIZE
-    pad <- floor(total_gap_size / gaps)
-    remaining_pad <- total_gap_size - pad * gaps
-    pads <- rep(pad, gaps)
-    i <- (gaps - remaining_pad + 1):gaps
-    pads[i] <- pads[i] + 1L
-    steps <- c(cnv$start, pads + LARGE_CNV_SAMPLE_WINDOW_SIZE)
-    starts <- cumsum(steps)
-    ends <- starts + LARGE_CNV_SAMPLE_WINDOW_SIZE - 1L
-
-    GRanges(cnv$chr, IRanges(starts, ends))
-}
-
-# Like `tile_cnv()`, but different.
 select_spaced_intervals <- function(n) {
     if (n <= INTERVAL_PLOT_COUNT) {
         return(1:n)
@@ -412,9 +212,10 @@ plot_singleton_intervals <- function(x, mids, col, cex) {
 #'
 #' @param cnv `list` Information of the CNV.
 #' @param norm_cov `data.table` Normalized coverage matrix for the CNV region. Should be smoothed
-#'   and sampled.
+#'   sampled.
+#' @param carriers `character` Carrier samples.
 #' @param outfile The path to the plot.
-make_plot <- function(cnv, norm_cov, outfile) {
+plot_cnv <- function(cnv, norm_cov, carriers, outfile) {
     # make plot main
     size_pretty <- pretty_cnv_size(cnv)
     start_pretty <- formatC(cnv$cnv_start, big.mark = ",", format = "d")
@@ -444,16 +245,16 @@ make_plot <- function(cnv, norm_cov, outfile) {
             xaxs = "i",
             xaxt = "n")
     # plot carriers
-    matlines(mids, as.matrix(norm_cov[, .SD, .SDcols = cnv$samples_split]),
+    matlines(mids, as.matrix(norm_cov[, .SD, .SDcols = carriers]),
              lty = 1, lwd = 2,
              col = cnv_col)
     # lonely intervals - background
-    bg_samples <- colnames(norm_cov)[!colnames(norm_cov) %in% c("chr", "start", "end", cnv$samples_split)]
+    bg_samples <- setdiff(colnames(norm_cov), c("chr", "start", "end", carriers))
     for (bg in norm_cov[, .SD, .SDcols = bg_samples]) {
         plot_singleton_intervals(bg, mids, "grey", 0.5)
     }
     # lonely intervals - carriers
-    for (fg in norm_cov[, .SD, .SDcols = cnv$samples_split]) {
+    for (fg in norm_cov[, .SD, .SDcols = carriers]) {
         plot_singleton_intervals(fg, mids, cnv_col, 2)
     }
     # add padding indicators
@@ -474,67 +275,54 @@ make_plot_path <- function(cnv, outdir) {
     file.path(outdir, plot_name)
 }
 
-#' Add padding to CNV.
-#'
-#' The coordinates of the expanded region will be placed in `cnv$start` and
-#' `cnv$end` and the original coordiantes will be placed in `cnv$cnv_start`
-#' and `cnv$cnv_end`.
-#'
-#' @param cnv `list` Information of the CNV.
-#' @returns `list` Updated CNV information.
-expand_cnv <- function(cnv) {
-    pad_size <- ceiling((cnv$end - cnv$start + 1L) * PAD_EXPANSION_FACTOR)
-    cnv$cnv_start <- cnv$start
-    cnv$cnv_end <- cnv$end
-    cnv$start <- max(1L, cnv$cnv_start - pad_size)
-    cnv$end <- cnv$cnv_end + pad_size
-
-    cnv
+get_bincov_from_dir <- function(path, variant) {
+    rdx <- file.path(path, sprintf("%s.rdx", variant))
+    readRDS(rdx)
 }
 
-# Main
-visualize <- function(cnv, bincov_map, medians_map, sample_map, outdir) {
-    cnv <- expand_cnv(cnv)
-    batches <- unique(vapply(cnv$samples_split, \(x) gethash(sample_map, x), character(1)))
-    if (any(sapply(batches, is.null))) {
-        stop("some samples do not have a batch")
-    }
-    bincov_paths <- vapply(batches, \(x) gethash(bincov_map, x), character(1))
-    if (any(sapply(bincov_paths, is.null))) {
-        stop("some batches do not have a bincov path")
-    }
-    coverage <- load_cnv_coverage(cnv, bincov_paths)
-    medians_paths <- vapply(batches, \(x) gethash(medians_map, x), character(1))
-    if (any(sapply(medians_paths, is.null))) {
-        stop("some batches do not have a medians path")
-    }
-    medians <- read_medians(medians_paths)
-    norms <- normalize_cov(coverage, medians)
+make_plot <- function(cnv, sample_map, batch_dir_map, outdir) {
+    samples <- strsplit(cnv$sample, split = ",", fixed = TRUE)[[1]]
+    batches <- vapply(samples, \(x) gethash(sample_map, x), character(1)) |> unique()
+    batch_dirs <- vapply(batches, \(x) gethash(batch_dir_map, x), character(1))
+    bincovs <- lapply(batch_dirs, \(x) get_bincov_from_dir(x, cnv$vid))
+    # assume bincovs are keyed on chr, start, end
+    merged <- Reduce(merge, bincovs)
 
     # smooth
-    norms[, names(.SD) := lapply(.SD, rollmean), .SDcols = !patterns("chr|start|end")]
+    merged[, names(.SD) := lapply(.SD, rollmean), .SDcols = !patterns("chr|start|end")]
 
-    # sample intervals to reduce noise
-    norms <- norms[select_spaced_intervals(.N), ]
+    # sample intervals
+    merged <- merged[select_spaced_intervals(.N), ]
 
     plot_path <- make_plot_path(cnv, outdir)
-    make_plot(cnv, norms, plot_path)
+
+    plot_cnv(cnv, merged, samples, plot_path)
 }
 
-message("reading CNVs")
-records <- read_cnvs(opts$cnvs)
-message("reading sample batches")
-sample_map <- read_keyed_tsv(opts$sample_batches)
-message("reading coverage paths")
-bincov_map <- read_keyed_tsv(opts$coverage_paths)
-message("reading median paths")
-medians_map <- read_keyed_tsv(opts$medians_paths)
-dir.create(opts$output)
+main <- function() {
+    argv <- commandArgs(trailingOnly = TRUE)
+    if (length(argv) != 4) {
+        usage(stderr())
+        quit(save = "no", status = 2)
+    }
 
-for (i in seq_len(nrow(records))) {
-    rec <- as.list(records[i, ])
-    rec$samples_split <- strsplit(rec$samples, split = ",", fixed = TRUE)[[1]]
-    message(sprintf("plotting '%s' (%s:%d-%d)", rec$vid, rec$chr, rec$start, rec$end))
-    visualize(rec, bincov_map, medians_map, sample_map, opts$output)
+    suppressPackageStartupMessages(library(data.table))
+
+    outdir <- argv[[4]]
+    dir.create(outdir)
+    message("reading CNVs")
+    cnvs <- read_cnvs(argv[[1]])
+    message("reading sample table")
+    sample_map <- read_keyed_tsv(argv[[2]])
+    message("reading batch directory table")
+    batch_dir_map <- read_keyed_tsv(argv[[3]])
+
+    for (i in seq_len(nrow(cnvs))) {
+        tmp <- as.list(cnvs[i, ])
+        message(paste0("plotting ", tmp$vid))
+        make_plot(tmp, sample_map, batch_dir_map, outdir)
+    }
+    message("done")
 }
-message("done")
+
+main()

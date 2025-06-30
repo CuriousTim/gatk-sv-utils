@@ -176,7 +176,7 @@ load_cnv_coverage <- function(cnv, paths) {
 #' @param cnv `list` Information of the CNV.
 #' @returns `character(1)` A CNV size formatted as a pretty string.
 pretty_cnv_size <- function(cnv) {
-    cnv_size <- cnv$cnv_end - cnv$cnv_start + 1L
+    cnv_size <- cnv$end - cnv$start + 1L
     if (cnv_size <= 1000) {
         size_pretty <- sprintf("%d b", cnv_size)
     } else if (cnv_size <= 100000) {
@@ -218,8 +218,8 @@ plot_singleton_intervals <- function(x, mids, col, cex) {
 plot_cnv <- function(cnv, norm_cov, carriers, outfile) {
     # make plot main
     size_pretty <- pretty_cnv_size(cnv)
-    start_pretty <- formatC(cnv$cnv_start, big.mark = ",", format = "d")
-    end_pretty <- formatC(cnv$cnv_end, big.mark = ",", format = "d")
+    start_pretty <- formatC(cnv$start, big.mark = ",", format = "d")
+    end_pretty <- formatC(cnv$end, big.mark = ",", format = "d")
     if (nchar(cnv$samples) > 30) {
         samples_pretty <- paste0(substr(cnv$samples, 1, 30), "...")
     } else {
@@ -259,8 +259,8 @@ plot_cnv <- function(cnv, norm_cov, carriers, outfile) {
     }
     # add padding indicators
     ylim <- par("usr")[3:4]
-    rect(xlim[[1]], ylim[[1]], cnv$cnv_start, ylim[[2]], col = "#FFAF0044", border = NA)
-    rect(cnv$cnv_end, ylim[[1]], xlim[[2]], ylim[[2]], col = "#FFAF0044", border = NA)
+    rect(xlim[[1]], ylim[[1]], cnv$start, ylim[[2]], col = "#FFAF0044", border = NA)
+    rect(cnv$end, ylim[[1]], xlim[[2]], ylim[[2]], col = "#FFAF0044", border = NA)
     # add x-axis
     xticks <- axisTicks(xlim, log = FALSE, nint = 10)
     xlabs <- formatC(xticks, big.mark = ",", format = "d")
@@ -271,7 +271,7 @@ plot_cnv <- function(cnv, norm_cov, carriers, outfile) {
 
 make_plot_path <- function(cnv, outdir) {
     plot_name <- sprintf("%s_%d-%d_%s_%s.jpg",
-                         cnv$chr, cnv$cnv_start, cnv$cnv_end, cnv$vid, cnv$svtype)
+                         cnv$chr, cnv$start, cnv$end, cnv$vid, cnv$svtype)
     file.path(outdir, plot_name)
 }
 

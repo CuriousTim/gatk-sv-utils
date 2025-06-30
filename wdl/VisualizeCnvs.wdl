@@ -353,7 +353,7 @@ task MakePlots {
     sample_table='~{sample_table}'
 
     paste "${batches}" <(sed 's/\.tar$//' "${bincov_tars}") > bincov_map.tsv
-    cat "${bincov_tars}" | xargs -I'{}' tar -xf '{}'
+    cat "${bincov_tars}" | xargs -I'{}' tar -xvf '{}'
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_cnvs.R \
       "${variants}" \

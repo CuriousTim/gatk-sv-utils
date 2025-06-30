@@ -191,7 +191,7 @@ task SubsetBincovMatrix {
     File bincov
     File bincov_index
     File medians
-    File r_docker
+    String r_docker
   }
 
   Float disk_size = size(bincov, "GB") * 2

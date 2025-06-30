@@ -356,9 +356,9 @@ task MakePlots {
     cat "${bincov_tars}" | xargs -I'{}' tar -xf '{}'
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_cnvs.R \
-      "${variants}"
-      "${sample_table}"
-      bincov_map.tsv
+      "${variants}" \
+      "${sample_table}" \
+      bincov_map.tsv \
       plots
 
     tar -cvzf plots.tar.gz plots

@@ -279,21 +279,21 @@ task ShardVariants {
     ARGIND == 2 {
       Bincov_arr[$1] = $2
     }
-    ARGIND > 3 {
+    ARGIND > 2 {
       split($6, b, /,/)
       for (i in b) {
         Batches[Sample_arr[b[i]]]
       }
     }
     BEGINFILE {
-      if (ARGIND > 4) {
+      if (ARGIND > 2) {
         n = split(FILENAME, p, /\//)
         Shard = p[n]
         delete Batches
       }
     }
     ENDFILE {
-      if (ARGIND > 4) {
+      if (ARGIND > 2) {
         batches_out = "batches/" Shard
         bincovs_out = "bincov/" Shard
         for (id in Batches) {

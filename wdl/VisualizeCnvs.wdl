@@ -352,8 +352,11 @@ task MakePlots {
     bincov_tars='~{write_lines(bincov_tars)}'
     sample_table='~{sample_table}'
 
-    paste "${batches}" <(sed 's/\.tar$//' "${bincov_tars}") > bincov_map.tsv
-    cat "${bincov_tars}" | xargs -I'{}' tar -xvf '{}'
+    while IFS=$'\t' read -r batch bincov; do
+      bn="$(basename "${bincov}" .tar)"
+      tar -xf "${bincov}"
+      printf '%s\t%s\n' "${batch}" "${bn}" >> bincov_map.tsv
+    done < <(paste "${batches}" "${bincov_tars}")
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_cnvs.R \
       "${variants}" \

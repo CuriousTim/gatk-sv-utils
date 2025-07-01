@@ -11,6 +11,8 @@ workflow VisualizeCnvs {
     String plot_prefix
     Int min_size
     Int variants_per_shard = 40
+    # padding to use around CNV when plotting, as fraction of CNV length
+    Float padding = 0.5
 
     File sample_table # TSV with sample_id, sample_set_id
     Array[String] sample_set_ids
@@ -35,6 +37,7 @@ workflow VisualizeCnvs {
   call MakeBincovQueryManifests {
     input:
       cnvs = ExtractCnvs.cnvs,
+      padding = padding,
       sample_table = sample_table,
       r_docker = r_docker
   }
@@ -164,6 +167,7 @@ task ExtractCnvs {
 task MakeBincovQueryManifests {
   input {
     Array[File] cnvs
+    Float padding
     File sample_table
     String r_docker
   }
@@ -187,12 +191,13 @@ task MakeBincovQueryManifests {
 
     cnvs='~{write_lines(cnvs)}'
     sample_table='~{sample_table}'
+    padding=~{padding}
 
     cat "${cnvs}" | xargs cat > merged_cnvs.tsv
 
     mkdir manifests
     Rscript /opt/gatk-sv-utils/scripts/batch_variants.R merged_cnvs.tsv \
-      "${sample_table}" manifests
+      "${sample_table}" manifests "${padding}"
   >>>
 
   output {

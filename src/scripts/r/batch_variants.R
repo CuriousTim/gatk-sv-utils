@@ -29,15 +29,15 @@ LARGE_CNV_SAMPLE_WINDOW_SIZE <- 2000L
 # minimum CNV size to use sampling strategy
 LARGE_CNV_SIZE <- LARGE_CNV_SAMPLE_COUNT * LARGE_CNV_SAMPLE_WINDOW_SIZE
 
-# Fraction of CNV length to add to the CNV as padding
-PAD_EXPANSION_FACTOR <- 0.5
+# maximum size of region that tabix can index
+TABIX_MAX_SEQLEN <- 536870912L
 
 MAX_BACKGROUND_SAMPLES <- 500L
 
 # Functions ------------------------------------------------------------------
 
 usage <- function(con) {
-    cat("usage: Rscript batch_variants.R <cnvs> <sample_table> <outdir>\n",
+    cat("usage: Rscript batch_variants.R <cnvs> <sample_table> <outdir> <pad>\n",
         file = con)
 }
 
@@ -135,11 +135,11 @@ make_hashmap <- function(keys, vals) {
     h
 }
 
-expand_cnvs <- function(x) {
+expand_cnvs <- function(x, pad_factor) {
     sizes <- x$end - x$start + 1L
-    pad <- ceiling(sizes * PAD_EXPANSION_FACTOR)
+    pad <- ceiling(sizes * pad_factor)
     x[, start := pmax(1L, start - pad)]
-    x[, end := end + pad]
+    x[, end := pmin(end + pad, TABIX_MAX_SEQLEN)]
 
     x
 }
@@ -223,13 +223,17 @@ write_manifests <- function(store, outdir) {
 
 main <- function() {
     argv <- commandArgs(trailingOnly = TRUE)
-    if (length(argv) != 3) {
+    if (length(argv) != 4) {
         usage(stderr())
         quit(save = "no", status = 2)
     }
 
     suppressPackageStartupMessages(library(data.table))
 
+    padding <- suppressWarnings(as.double(argv[[4]]))
+    if (is.na(padding) || is.nan(padding) || !is.finite(padding) || padding < 0) {
+        stop("padding must be a finite float >= 0")
+    }
     outdir <- argv[[3]]
     dir.create(outdir)
     message("reading CNVs")
@@ -239,7 +243,7 @@ main <- function() {
     sample_map <- make_hashmap(sample_table$sample, sample_table$batch)
     setkey(sample_table, batch)
     message("expanding CNVs")
-    cnvs <- expand_cnvs(cnvs)
+    cnvs <- expand_cnvs(cnvs, padding)
     store <- new.env(parent = emptyenv())
     for (i in seq_len(nrow(cnvs))) {
         tmp <- as.list(cnvs[i, ])

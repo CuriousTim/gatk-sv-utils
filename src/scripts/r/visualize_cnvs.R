@@ -131,46 +131,6 @@ rollmean <- function(x) {
     m
 }
 
-#' Load the coverage values over a CNV region.
-#'
-#' @param cnv `list` Information of the CNV.
-#' @param paths `character` Paths to the coverage matrices.
-#' @returns `data.table` Coverage matrix for the CNV region.
-load_cnv_coverage <- function(cnv, paths) {
-    if (cnv$end - cnv$start + 1L >= LARGE_CNV_SIZE) {
-        ranges <- tile_cnv(cnv)
-    } else {
-        ranges <- GRanges(cnv$chr, IRanges(cnv$start, cnv$end))
-    }
-
-    cons <- TabixFileList(paths)
-    headers <- lapply(cons, bincov_header)
-    all_samples <- lapply(headers, \(x) x[-(1:3)]) |> unlist() |> unique()
-    bg_samples <- all_samples[!all_samples %in% cnv$samples_split]
-    bg_samples <- sample(bg_samples, min(MAX_BACKGROUND_SAMPLES, length(bg_samples)))
-    keep_samples <- c(cnv$samples_split, bg_samples)
-
-    mats <- mapply(query_bincov, cons, headers,
-                   MoreArgs = list(samples = keep_samples, ranges = ranges),
-                   SIMPLIFY = FALSE,
-                   USE.NAMES = FALSE)
-
-    # All of the coverage matrices should have the same intervals,
-    # we merge just to be safe. This requires that `setkey()` be
-    # called for every data.table.
-    mats <- Reduce(merge, mats)
-
-    if (nrow(mats) == 1) {
-        stop("CNV must overlap at least two coverage intervals")
-    }
-
-    if (!all(cnv$samples_split %in% colnames(mats))) {
-        stop("carrier samples are missing from the coverage matrix")
-    }
-
-    mats
-}
-
 #' Prettify the CNV size.
 #'
 #' @param cnv `list` Information of the CNV.
@@ -275,16 +235,30 @@ make_plot_path <- function(cnv, outdir) {
     file.path(outdir, plot_name)
 }
 
-get_bincov_from_dir <- function(path, variant) {
+get_bincov_from_dir <- function(path, variant, all_carriers, batch_carriers) {
     rdx <- file.path(path, sprintf("%s.rdx", variant))
-    readRDS(rdx)
+    mat <- readRDS(rdx)
+    mat_samples <- setdiff(colnames(mat), c("chr", "start", "end"))
+    # find and remove carrier samples that are not carrier samples for this batch
+    # this addresses the case where samples are mistakenly assigned to multiple
+    # batches and become a carrier sample in one batch, but a background sample
+    # in another for the same variant
+    dups <- setdiff(intersect(mat_samples, all_carriers), batch_carriers)
+    if (length(dups) > 0) {
+        mat[, (dups) := list(NULL)]
+    }
+
+    mat
 }
 
 make_plot <- function(cnv, sample_map, batch_dir_map, outdir) {
     samples <- strsplit(cnv$sample, split = ",", fixed = TRUE)[[1]]
-    batches <- vapply(samples, \(x) gethash(sample_map, x), character(1)) |> unique()
-    batch_dirs <- vapply(batches, \(x) gethash(batch_dir_map, x), character(1))
-    bincovs <- lapply(batch_dirs, \(x) get_bincov_from_dir(x, cnv$vid))
+    batches <- vapply(samples, \(x) gethash(sample_map, x), character(1), USE.NAMES = FALSE)
+    grouped_samples <- split(samples, batches)
+    batch_dirs <- vapply(names(grouped_samples), \(x) gethash(batch_dir_map, x), character(1),
+                         USE.NAMES = FALSE)
+    bincovs <- mapply(\(x, y) get_bincov_from_dir(x, cnv$vid, samples, y),
+                      batch_dirs, grouped_samples, SIMPLIFY = FALSE, USE.NAMES = FALSE)
     # assume bincovs are keyed on chr, start, end
     merged <- Reduce(merge, bincovs)
 

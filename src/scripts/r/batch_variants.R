@@ -11,7 +11,7 @@
 #      batch                +---------------------------+
 # +=============+           |  $ranges: data.frame      |
 # |  variant_1 -|---------> |  $carriers: character()   |
-# |  variant_2  |           |  $bg_count: integer(1)  |
+# |  variant_2  |           |  $bg_count: integer(1)    |
 # |     ...     |           +---------------------------+
 # +=============+                       list
 #   environment

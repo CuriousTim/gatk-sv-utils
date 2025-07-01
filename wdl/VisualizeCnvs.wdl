@@ -4,6 +4,9 @@ version 1.0
 workflow VisualizeCnvs {
   input {
     Array[File] vcfs
+    # variant IDs to plot, one per line
+    # the variants will still be restricted to DELs and DUPs
+    File? variant_ids
     String plot_prefix
     Int min_size
     Int variants_per_shard = 40
@@ -22,6 +25,7 @@ workflow VisualizeCnvs {
     call ExtractCnvs {
       input:
         vcf = vcf,
+        variant_ids = variant_ids,
         min_size = min_size,
         base_docker = base_docker
     }
@@ -110,6 +114,7 @@ workflow VisualizeCnvs {
 task ExtractCnvs {
   input {
     File vcf
+    File? variant_ids
     Int min_size
     String base_docker
   }
@@ -133,9 +138,19 @@ task ExtractCnvs {
 
     vcf='~{vcf}'
     min_size='~{min_size}'
+    variant_ids='~{if defined(variant_ids) then variant_ids else ""}'
 
-    bcftools query --include "(SVTYPE == \"DEL\" || SVTYPE == \"DUP\") & FILTER ~ \"PASS\" & SVLEN >= ${min_size} & GT ~ \"1\"" \
-      --format '%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/SVTYPE\t[%SAMPLE,]\n' "${vcf}" \
+    format='%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/SVTYPE\t[%SAMPLE,]\n'
+    svtype_filter='(INFO/SVTYPE == "DEL" || INFO/SVTYPE == "DUP")'
+    gt_filter='GT = "alt"'
+    if [[ -n "${variant_ids:-}" ]]; then
+      mv "${variant_ids}" variant_ids.list
+      filter="${svtype_filter} & ID=@variant_ids.list & ${gt_filter}"
+    else
+      filter="${svtype_filter} & FILTER ~ \"PASS\" & INFO/SVLEN >= ${min_size} & ${gt_filter}"
+    fi
+
+    bcftools query --include "${filter}" --format "${format}" "${vcf}" \
       | awk -F'\t' '{sub(/,$/, "", $6); print}' OFS='\t' > cnvs.tsv
   >>>
 

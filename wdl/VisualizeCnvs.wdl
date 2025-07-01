@@ -7,6 +7,7 @@ workflow VisualizeCnvs {
     # variant IDs to plot, one per line
     # the variants will still be restricted to DELs and DUPs
     File? variant_ids
+    Boolean one_sample_per_plot = false
     String plot_prefix
     Int min_size
     Int variants_per_shard = 40
@@ -93,6 +94,7 @@ workflow VisualizeCnvs {
       input:
         variants = ShardVariants.shards[i],
         batches = ShardVariants.batches[i],
+        one_sample_per_plot = one_sample_per_plot,
         bincov_tars = read_lines(ShardVariants.bincov_paths[i]),
         sample_table = sample_table,
         r_docker = r_docker
@@ -335,6 +337,7 @@ task MakePlots {
   input {
     File variants
     File batches
+    Boolean one_sample_per_plot
     Array[File] bincov_tars
     File sample_table
     String r_docker
@@ -366,6 +369,7 @@ task MakePlots {
     batches='~{batches}'
     bincov_tars='~{write_lines(bincov_tars)}'
     sample_table='~{sample_table}'
+    one_sample_per_plot=~{if one_sample_per_plot then 1 else 0}
 
     while IFS=$'\t' read -r batch bincov; do
       bn="$(basename "${bincov}" .tar)"
@@ -377,7 +381,8 @@ task MakePlots {
       "${variants}" \
       "${sample_table}" \
       bincov_map.tsv \
-      plots
+      plots \
+      "${one_sample_per_plot}"
 
     tar -cvzf plots.tar.gz plots
   >>>

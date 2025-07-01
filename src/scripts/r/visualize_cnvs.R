@@ -1,4 +1,5 @@
-# Usage: Rscript visualize_cnvs.R <cnvs> <sample_table> <batch_dir_paths> <outdir>
+# Usage: Rscript visualize_cnvs.R <cnvs> <sample_table> <batch_dir_paths> \
+#   <outdir> <one_sample_per_plot>
 #
 # Plot CNVs
 
@@ -13,7 +14,7 @@ INTERVAL_PLOT_COUNT <- 26L
 # Functions ------------------------------------------------------------------
 
 usage <- function(con) {
-    cat("usage: Rscript visualize_cnvs.R <cnvs> <sample_table> <batch_tars_table> <outdir>\n",
+    cat("usage: Rscript visualize_cnvs.R <cnvs> <sample_table> <batch_tars_table> <outdir> <one_sample_per_plot>\n",
         file = con)
 }
 
@@ -180,10 +181,18 @@ plot_cnv <- function(cnv, norm_cov, carriers, outfile) {
     size_pretty <- pretty_cnv_size(cnv)
     start_pretty <- formatC(cnv$start, big.mark = ",", format = "d")
     end_pretty <- formatC(cnv$end, big.mark = ",", format = "d")
-    if (nchar(cnv$samples) > 30) {
-        samples_pretty <- paste0(substr(cnv$samples, 1, 30), "...")
+    # if we are plotting one sample per plot, the carrier sample ID could be
+    # different from the comma-separated list of carrier sample IDs
+    if (length(carriers) == 1) {
+        sample_string <- carriers
     } else {
-        samples_pretty <- cnv$samples
+        sample_string <- cnv$samples
+    }
+
+    if (nchar(sample_string) > 30) {
+        samples_pretty <- paste0(substr(sample_string, 1, 30), "...")
+    } else {
+        samples_pretty <- sample_string
     }
     main <- sprintf("%s:%s-%s (hg38)\n%s (%s)",
                     cnv$chr, start_pretty, end_pretty, samples_pretty, size_pretty)
@@ -229,12 +238,6 @@ plot_cnv <- function(cnv, norm_cov, carriers, outfile) {
     dev.off()
 }
 
-make_plot_path <- function(cnv, outdir) {
-    plot_name <- sprintf("%s_%d-%d_%s_%s.jpg",
-                         cnv$chr, cnv$start, cnv$end, cnv$vid, cnv$svtype)
-    file.path(outdir, plot_name)
-}
-
 get_bincov_from_dir <- function(path, variant, all_carriers, batch_carriers) {
     rdx <- file.path(path, sprintf("%s.rdx", variant))
     mat <- readRDS(rdx)
@@ -251,7 +254,7 @@ get_bincov_from_dir <- function(path, variant, all_carriers, batch_carriers) {
     mat
 }
 
-make_plot <- function(cnv, sample_map, batch_dir_map, outdir) {
+make_plot <- function(cnv, sample_map, batch_dir_map, one_sample_per_plot, outdir) {
     samples <- strsplit(cnv$sample, split = ",", fixed = TRUE)[[1]]
     batches <- vapply(samples, \(x) gethash(sample_map, x), character(1), USE.NAMES = FALSE)
     grouped_samples <- split(samples, batches)
@@ -268,20 +271,34 @@ make_plot <- function(cnv, sample_map, batch_dir_map, outdir) {
     # sample intervals
     merged <- merged[select_spaced_intervals(.N), ]
 
-    plot_path <- make_plot_path(cnv, outdir)
-
-    plot_cnv(cnv, merged, samples, plot_path)
+    if (one_sample_per_plot) {
+        bg_samples <- setdiff(colnames(merged), c("chr", "start", "end", samples))
+        for (s in samples) {
+            plot_name <- sprintf("%s_%d-%d_%s_%s_%s.jpg",
+                                 cnv$chr, cnv$start, cnv$end, cnv$vid,
+                                 cnv$svtype, s)
+            plot_path <- file.path(outdir, plot_name)
+            keep <- c("chr", "start", "end", s, bg_samples)
+            plot_cnv(cnv, merged[, .SD, .SDcols = keep], s, plot_path)
+        }
+    } else {
+        plot_name <- sprintf("%s_%d-%d_%s_%s.jpg",
+                             cnv$chr, cnv$start, cnv$end, cnv$vid, cnv$svtype)
+        plot_path <- file.path(outdir, plot_name)
+        plot_cnv(cnv, merged, samples, plot_path)
+    }
 }
 
 main <- function() {
     argv <- commandArgs(trailingOnly = TRUE)
-    if (length(argv) != 4) {
+    if (length(argv) != 5) {
         usage(stderr())
         quit(save = "no", status = 2)
     }
 
     suppressPackageStartupMessages(library(data.table))
 
+    one_sample_per_plot <- if (argv[[5]] == "0") FALSE else TRUE
     outdir <- argv[[4]]
     dir.create(outdir)
     message("reading CNVs")
@@ -294,7 +311,7 @@ main <- function() {
     for (i in seq_len(nrow(cnvs))) {
         tmp <- as.list(cnvs[i, ])
         message(paste0("plotting ", tmp$vid))
-        make_plot(tmp, sample_map, batch_dir_map, outdir)
+        make_plot(tmp, sample_map, batch_dir_map, one_sample_per_plot, outdir)
     }
     message("done")
 }

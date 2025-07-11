@@ -4,6 +4,10 @@ version 1.0
 workflow VisualizeCnvs {
   input {
     Array[File] vcfs
+    # tab-delimited files of CNVs
+    # chr,start,end,id,svtype,samples
+    # samples must be comma-delimited
+    Array[File] cnvs
     # variant IDs to plot, one per line
     # the variants will still be restricted to DELs and DUPs
     File? variant_ids
@@ -24,19 +28,21 @@ workflow VisualizeCnvs {
     String r_docker
   }
 
-  scatter (vcf in vcfs) {
-    call ExtractCnvs {
-      input:
-        vcf = vcf,
-        variant_ids = variant_ids,
-        min_size = min_size,
-        base_docker = base_docker
+  if (!defined(cnvs)) {
+    scatter (vcf in vcfs) {
+      call ExtractCnvs {
+        input:
+          vcf = vcf,
+          variant_ids = variant_ids,
+          min_size = min_size,
+          base_docker = base_docker
+      }
     }
   }
 
   call MakeBincovQueryManifests {
     input:
-      cnvs = ExtractCnvs.cnvs,
+      cnvs = select_first([cnvs, ExtractCnvs.cnvs]),
       padding = padding,
       sample_table = sample_table,
       r_docker = r_docker

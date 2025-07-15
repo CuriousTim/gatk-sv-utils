@@ -47,7 +47,7 @@ task Benchmark {
   runtime {
     bootDiskSizeGb: 8
     cpus: 2
-    disks: "local-disk ${disk_size} HDD"
+    disks: "local-disk ${ceil(disk_size)} HDD"
     docker: r_docker
     maxRetries: 1
     memory: "4 GiB"

@@ -23,7 +23,7 @@ install <- function(x) {
 
 # Packages --------------------------------------------------------------------
 cran_pkgs <- c("data.table@1.17.8",
-               "R.utils@2.12.3") |>
+               "R.utils@2.13.0") |>
   parse_pkgs()
 bioc_pkgs <- c("Rsamtools@2.24.0",
                "GenomicRanges@1.60.0") |>

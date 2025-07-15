@@ -67,7 +67,7 @@ task GetContigFromVcf {
     contig='~{contig}'
     out_vcf='~{output_vcf}'
 
-    { bcftools index --stats "${in_vcf}" | grep -F "^${contig}\$" - } \
+    { bcftools index --stats "${in_vcf}" | grep -F "^${contig}\$" -; } \
       || { printf '%s not in vcf\n' "${contig}" >&2 && exit 1; }
     trap 'rm -f "${tmpfile}"' EXIT
     tmpfile="$(mktemp -p "${PWD}")"

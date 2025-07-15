@@ -104,3 +104,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: BenchmarkDenovo
+    subclass: WDL
+    primaryDescriptorPath: /wdl/BenchmarkDenovo.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

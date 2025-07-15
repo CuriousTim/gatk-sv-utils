@@ -7,7 +7,7 @@ workflow VisualizeCnvs {
     # tab-delimited files of CNVs
     # chr,start,end,id,svtype,samples
     # samples must be comma-delimited
-    Array[File] cnvs
+    Array[File]? cnvs
     # variant IDs to plot, one per line
     # the variants will still be restricted to DELs and DUPs
     File? variant_ids

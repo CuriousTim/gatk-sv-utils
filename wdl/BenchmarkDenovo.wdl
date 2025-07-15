@@ -59,10 +59,10 @@ task Benchmark {
     set -o nounset
     set -o pipefail
 
-    denovo="~{denovo}"
-    truth="~{truth}"
-    cleanvcf_tsv="~{cleanvcf_tsv}"
-    sample_table="~{sample_table}"
+    denovo='~{denovo}'
+    truth='~{truth}'
+    cleanvcf_tsv='~{cleanvcf_tsv}'
+    sample_table='~{sample_table}'
 
     Rscript /opt/gatk-sv-utils/scripts/benchmark_denovo.R \
       "${denovo}" \

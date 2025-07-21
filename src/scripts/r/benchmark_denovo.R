@@ -13,7 +13,6 @@ cleanvcf_path <- args[[3]]
 sample_table_path <- args[[4]]
 
 svmatch <- function(query, subject, min_ovp, size_similarity, breakend_window) {
-    browser()
     if (length(query) == 0 || length(subject) == 0) {
         return(NULL)
     }

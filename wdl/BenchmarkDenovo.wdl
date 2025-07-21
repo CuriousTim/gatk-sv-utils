@@ -30,6 +30,8 @@ workflow BenchmarkDenovo {
     File not_denovo_not_in_truth = Benchmark.not_denovo_not_in_truth
     File truth_in_denovo = Benchmark.truth_in_denovo
     File truth_not_in_denovo = Benchmark.truth_not_in_denovo
+    File overlaps_plot = Benchmark.overlaps_plot
+    File benchmark_log = Benchmark.benchmark_log
   }
 }
 
@@ -68,7 +70,7 @@ task Benchmark {
       "${denovo}" \
       "${truth}" \
       "${cleanvcf_tsv}" \
-      "${sample_table}"
+      "${sample_table}" 2> benchmark.log
   >>>
 
   output {
@@ -80,5 +82,7 @@ task Benchmark {
     File not_denovo_not_in_truth = "not_denovo_not_in_truth.tsv"
     File truth_in_denovo = "truth_in_denovo.tsv"
     File truth_not_in_denovo = "truth_not_in_denovo.tsv"
+    File overlaps_plot = "benchmark_venn.jpeg"
+    File benchmark_log = "benchmark.log"
   }
 }

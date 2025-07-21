@@ -112,3 +112,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: AddContigHeadersToVcf
+    subclass: WDL
+    primaryDescriptorPath: /wdl/AddContigHeadersToVcf.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

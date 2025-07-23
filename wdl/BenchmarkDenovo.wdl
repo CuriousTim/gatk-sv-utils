@@ -51,7 +51,7 @@ task ReformatVcf {
     String base_docker
   }
 
-  File disk_size = size(vcf, "GB")
+  File disk_size = size(vcf, "GB") * 2 + 16
 
   runtime {
     bootDiskSizeGb: 8

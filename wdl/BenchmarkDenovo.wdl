@@ -6,24 +6,34 @@ workflow BenchmarkDenovo {
     # See benchmark_denovo.R
     File denovo
     File truth
-    File cleanvcf_tsv
+    # VCFs that were run through the de novo pipeline
+    Array[File] vcfs
     # Basically the sample data table, but in a convenient file
     File sample_table
+    String base_docker
     String r_docker
+  }
+
+  scatter (vcf in vcfs) {
+    call ReformatVcf {
+      input:
+        vcf = vcf,
+        base_docker = base_docker
+    }
   }
 
   call Benchmark {
     input:
       denovo = denovo,
       truth = truth,
-      cleanvcf_tsv = cleanvcf_tsv,
+      input_vcf_tsvs = vcfs,
       sample_table = sample_table,
       r_docker = r_docker
   }
 
   output {
-    File truth_in_cleanvcf = Benchmark.truth_in_cleanvcf
-    File truth_not_in_cleanvcf = Benchmark.truth_not_in_cleanvcf
+    File truth_in_input_vcf = Benchmark.truth_in_input_vcf
+    File truth_not_in_input_vcf = Benchmark.truth_not_in_input_vcf
     File denovo_in_truth = Benchmark.denovo_in_truth
     File denovo_not_in_truth = Benchmark.denovo_not_in_truth
     File not_denovo_in_truth = Benchmark.not_denovo_in_truth
@@ -35,16 +45,55 @@ workflow BenchmarkDenovo {
   }
 }
 
+task ReformatVcf {
+  input {
+    File vcf
+    String base_docker
+  }
+
+  File disk_size = size(vcf, "GB")
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 2
+    disks: "local-disk ${ceil(disk_size)} HDD"
+    docker: base_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    vcf='~{vcf}'
+
+    bcftools query -i 'GT="alt" & INFO/SVTYPE != "CNV" & INFO/SVTYPE != "BND"' \
+      -f '%CHROM\t%POS\t%INFO/END\t%INFO/SVTYPE\t[%SAMPLE,]\n' \
+      "${vcf}" \
+      | gawk -F'\t' '{sub(/,$/, "", $5); split($5, a, /,/); for(i in a){$5=a[i]; print}}' OFS='\t' \
+      | gzip -c > vcf.tsv.gz
+  >>>
+
+  output {
+    File vcf_tsv = "vcf.tsv.gz"
+  }
+}
+
 task Benchmark {
   input {
     File denovo
     File truth
-    File cleanvcf_tsv
+    Array[File] input_vcf_tsvs
     File sample_table
     String r_docker
   }
 
-  Float disk_size = size([denovo, truth, cleanvcf_tsv], "GB") * 2 + size(sample_table, "GB") + 16
+  Float disk_size = size([denovo, truth], "GB") * 2
+    + (size(input_vcf_tsvs, "GB") * 2)
+    + size(sample_table, "GB") + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -63,19 +112,22 @@ task Benchmark {
 
     denovo='~{denovo}'
     truth='~{truth}'
-    cleanvcf_tsv='~{cleanvcf_tsv}'
+    input_vcf_tsvs='~{write_lines(input_vcf_tsvs)}'
     sample_table='~{sample_table}'
+
+    cat "${input_vcf_tsvs}" \
+      | xargs cat > vcf.tsv.gz
 
     Rscript /opt/gatk-sv-utils/scripts/benchmark_denovo.R \
       "${denovo}" \
       "${truth}" \
-      "${cleanvcf_tsv}" \
+      vcf.tsv.gz \
       "${sample_table}" 2> benchmark.log
   >>>
 
   output {
-    File truth_in_cleanvcf = "truth_in_cleanvcf.tsv"
-    File truth_not_in_cleanvcf = "truth_not_in_cleanvcf.tsv"
+    File truth_in_input_vcf = "truth_in_input_vcf.tsv"
+    File truth_not_in_input_vcf = "truth_not_in_input_vcf.tsv"
     File denovo_in_truth = "denovo_in_truth.tsv"
     File denovo_not_in_truth = "denovo_not_in_truth.tsv"
     File not_denovo_in_truth = "not_denovo_in_truth.tsv"

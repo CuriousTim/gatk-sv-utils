@@ -26,7 +26,7 @@ workflow BenchmarkDenovo {
     input:
       denovo = denovo,
       truth = truth,
-      input_vcf_tsvs = vcfs,
+      input_vcf_tsvs = ReformatVcf.vcf_tsv,
       sample_table = sample_table,
       r_docker = r_docker
   }

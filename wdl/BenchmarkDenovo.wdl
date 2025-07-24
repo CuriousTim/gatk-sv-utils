@@ -135,7 +135,7 @@ task Benchmark {
     File not_denovo_not_in_truth = "not_denovo_not_in_truth.tsv"
     File truth_in_denovo = "truth_in_denovo.tsv"
     File truth_not_in_denovo = "truth_not_in_denovo.tsv"
-    File overlaps_plot = "benchmark_venn.jpeg"
+    File overlaps_plot = "benchmark_venn.jpg"
     File benchmark_log = "benchmark.log"
   }
 }

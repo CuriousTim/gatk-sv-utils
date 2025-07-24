@@ -122,7 +122,8 @@ task Benchmark {
       "${denovo}" \
       "${truth}" \
       vcf.tsv.gz \
-      "${sample_table}" 2> benchmark.log
+      "${sample_table}" \
+        |& tee benchmark.log
   >>>
 
   output {

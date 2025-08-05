@@ -95,13 +95,16 @@ task Benchmark {
     + (size(input_vcf_tsvs, "GB") * 2)
     + size(sample_table, "GB") + 16
 
+  Int mem = ceil(size(input_vcf_tsvs, "GB") * 1.5) + 4
+  Int cpu = ceil(mem / 2)
+
   runtime {
     bootDiskSizeGb: 8
-    cpus: 2
+    cpus: cpu
     disks: "local-disk ${ceil(disk_size)} HDD"
     docker: r_docker
     maxRetries: 1
-    memory: "4 GiB"
+    memory: "${mem} GiB"
     preemptible: 3
   }
 

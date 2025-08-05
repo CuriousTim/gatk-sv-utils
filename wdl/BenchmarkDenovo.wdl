@@ -95,8 +95,8 @@ task Benchmark {
     + (size(input_vcf_tsvs, "GB") * 2)
     + size(sample_table, "GB") + 16
 
-  Int mem = ceil(size(input_vcf_tsvs, "GiB") * 4) + 4
-  Int cpu = ceil(mem / 2)
+  Int mem = ceil(size(input_vcf_tsvs, "GiB") * 10) + 4
+  Int cpu = ceil(mem / 4)
 
   runtime {
     bootDiskSizeGb: 8

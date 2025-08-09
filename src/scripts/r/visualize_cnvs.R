@@ -103,8 +103,8 @@ select_spaced_intervals <- function(n) {
     gaps <- INTERVAL_PLOT_COUNT - 1L
     total_gap_size <- n - INTERVAL_PLOT_COUNT
     remaining_pad <- total_gap_size %% gaps
+    pads <- rep(floor(total_gap_size / gaps), gaps)
     i <- seq_len(remaining_pad)
-    pad <- rep(floor(total_gap_size / gaps), gaps)
     pads[i] <- pads[i] + 1L
     steps <- c(1, pads + 1L)
 

@@ -120,3 +120,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: NullifyBatchEffectGenotypes
+    subclass: WDL
+    primaryDescriptorPath: /wdl/NullifyBatchEffectGenotypes.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

@@ -30,7 +30,7 @@ endef
 all: ;
 
 .PHONY: docker
-docker: docker-base docker-r
+docker: docker-base docker-r docker-python
 
 .PHONY: docker-base
 docker-base: docker_name := base
@@ -43,6 +43,14 @@ endif
 .PHONY: docker-r
 docker-r: docker_name := r
 docker-r: docker/r/Dockerfile
+	$(build-docker)
+ifneq ($(strip $(DOCKER_REPO)),)
+	$(push-docker)
+endif
+
+.PHONY: docker-python
+docker-python: docker_name := python
+docker-python: docker/python/Dockerfile
 	$(build-docker)
 ifneq ($(strip $(DOCKER_REPO)),)
 	$(push-docker)

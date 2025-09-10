@@ -59,8 +59,8 @@ def main():
                         )
             outvcf.write(rec)
     finally:
-        close(invcf)
-        close(outvcf)
+        invcf.close()
+        outvcf.close()
 
     pysam.tabix_index(invcf.filename, preset = "vcf")
 

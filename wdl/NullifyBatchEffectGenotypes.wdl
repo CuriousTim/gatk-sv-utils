@@ -48,7 +48,7 @@ task NullifyGenotypes {
     preemptible: 3
   }
 
-  String nulled_vcf_name = vcf_prefix + basename(vcf)
+  String nulled_vcf_name = vcf_prefix + "-" + basename(vcf)
   String nulled_vcf_index_name = nulled_vcf_name + ".tbi"
 
   command <<<

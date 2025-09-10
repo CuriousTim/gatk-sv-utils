@@ -62,7 +62,7 @@ def main():
         invcf.close()
         outvcf.close()
 
-    pysam.tabix_index(invcf.filename, preset = "vcf")
+    pysam.tabix_index(sys.argv[2], preset = "vcf")
 
 
 if __name__ == "__main__":

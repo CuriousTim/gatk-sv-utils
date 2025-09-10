@@ -61,7 +61,7 @@ task NullifyGenotypes {
     variant_table='~{variant_table}'
     nulled_vcf_name='~{nulled_vcf_name}'
 
-    python3 /opt/gatk-sv-utils/scripts/nullify_batch_effect_genotypes.py \
+    python3 /opt/gatk-sv-utils/scripts/nullify_batch_effect_gts.py \
       "${vcf}" "${nulled_vcf_name}" "${batch_table}" "${variant_table}"
   >>>
 

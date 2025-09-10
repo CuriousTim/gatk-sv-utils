@@ -25,7 +25,7 @@ install <- function(x) {
 cran_pkgs <- c("data.table@1.17.8",
                "R.utils@2.13.0") |>
   parse_pkgs()
-bioc_pkgs <- c("Rsamtools@2.24.0",
+bioc_pkgs <- c("Rsamtools@2.24.1",
                "GenomicRanges@1.60.0") |>
   parse_pkgs()
 

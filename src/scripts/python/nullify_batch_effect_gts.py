@@ -44,8 +44,8 @@ def load_variant_table(path):
 
 def main():
     invcf = VariantFile(sys.argv[1], mode="r")
-    outvcf = VariantFile(sys.argv[2], mode="w", header=vcf_in.header)
-    batch_map = load_batch_table(sys.argv[3], vcf_in.header.samples)
+    outvcf = VariantFile(sys.argv[2], mode="w", header=invcf.header)
+    batch_map = load_batch_table(sys.argv[3], invcf.header.samples)
     vid_map = load_variant_table(sys.argv[4])
 
     try:

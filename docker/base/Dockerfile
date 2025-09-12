@@ -3,13 +3,13 @@ FROM ubuntu:25.04
 ARG BCFTOOLS_VERSION="1.22"
 ARG BCFTOOLS_URI="https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2"
 
-ARG HTSLIB_VERSION="1.22"
+ARG HTSLIB_VERSION="1.22.1"
 ARG HTSLIB_URI="https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2"
 
 ARG BEDTOOLS_VERSION="2.31.1"
 ARG BEDTOOLS_URI="https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz"
 
-ARG DUCKDB_VERSION="1.3.1"
+ARG DUCKDB_VERSION="1.3.2"
 ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
 
 RUN apt-get update \
@@ -86,5 +86,9 @@ COPY src/scripts/base /opt/gatk-sv-utils/scripts
 ENV AWKPATH='.:/usr/local/share/awk/pongo'
 RUN mkdir -p /usr/local/share/awk/pongo
 COPY src/pongo /usr/local/share/awk/pongo
+
+RUN --mount=type=bind,source=src/bonobo,target=/tmp/bonobo,rw \
+  cd /tmp/bonobo \
+  make all && make install
 
 CMD ["bash"]

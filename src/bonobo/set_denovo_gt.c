@@ -1,6 +1,8 @@
+#define _POSIX_C_SOURCE 202405L // getline, strdup
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "htslib/khash.h"
 #include "htslib/hts.h"

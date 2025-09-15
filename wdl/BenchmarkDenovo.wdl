@@ -168,6 +168,7 @@ task SubsetStartVcf {
 
     start_vcf='~{start_vcf}'
     sample_ids='~{sample_ids}'
+    subset_vcf_name='~{subset_vcf_name}'
 
     bcftools view --samples-file "${sample_ids}" --write-index=tbi \
       --output "${subset_vcf_name}" --output-type z "${start_vcf}"

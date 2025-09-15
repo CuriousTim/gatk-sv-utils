@@ -213,7 +213,7 @@ task MakeDenovoVcf {
       SELECT DISTINCT "name", "sample"
       FROM 'denovos.tsv.gz'
       WHERE is_de_novo = 'TRUE'
-    ) TO 'denovo_vids' (HEADER false);
+    ) TO 'denovo_vids' (HEADER false, DELIMITER '\t');
     EOF
     duckdb ':memory:' < commands.sql
     if [[ ! -s denovo_vids ]]; then

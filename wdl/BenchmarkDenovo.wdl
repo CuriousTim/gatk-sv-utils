@@ -10,7 +10,7 @@ workflow BenchmarkDenovo {
     File truth_vcf
     File truth_vcf_index
     # VCFs that were run through the de novo pipeline split by contig
-    Array[File] start_vcfs
+    Array[File]+ start_vcfs
     File contigs
     File reference_dict
 
@@ -20,18 +20,19 @@ workflow BenchmarkDenovo {
 
   Array[String] contigs_arr = read_lines(contigs)
 
+  call GetSharedSamples {
+    input:
+      start_vcf = start_vcfs[0],
+      truth_vcf = truth_vcf,
+      sample_table = sample_table,
+      base_docker = base_docker
+  }
+
   scatter (i in range(length(contigs_arr))) {
     call SubsetStartVcf {
       input:
         start_vcf = start_vcfs[i],
-        sample_table = sample_table,
-        base_docker = base_docker
-    }
-
-    call MakeDenovoVcf {
-      input:
-        subset_start_vcf = SubsetStartVcf.subset_vcf,
-        denovos = denovos,
+        sample_ids = GetSharedSamples.shared_samples,
         base_docker = base_docker
     }
 
@@ -39,8 +40,15 @@ workflow BenchmarkDenovo {
       input:
         truth_vcf = truth_vcf,
         truth_vcf_index = truth_vcf_index,
-        sample_ids = SubsetStartVcf.kept_samples,
+        sample_ids = GetSharedSamples.shared_samples,
         contig = contigs_arr[i],
+        base_docker = base_docker
+    }
+
+    call MakeDenovoVcf {
+      input:
+        subset_start_vcf = SubsetStartVcf.subset_vcf,
+        denovos = denovos,
         base_docker = base_docker
     }
 
@@ -88,14 +96,58 @@ workflow BenchmarkDenovo {
   }
 }
 
-task SubsetStartVcf {
+task GetSharedSamples {
   input {
     File start_vcf
+    File truth_vcf
     File sample_table
     String base_docker
   }
 
-  Float disk_size = size([start_vcf, sample_table], "GB") * 2 + 16
+  Float disk_size = size([start_vcf, truth_vcf, sample_table], "GB") * 2 + 16
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk ${ceil(disk_size)} HDD"
+    docker: base_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    start_vcf='~{start_vcf}'
+    truth_vcf='~{truth_vcf}'
+    sample_table='~{sample_table}'
+
+    mv "${sample_table}" samples.tsv
+    duckdb ':memory:' "COPY (SELECT DISTINCT \"entity:sample_id\" FROM 'samples.tsv' WHERE cohort_short = 'SSC') TO 'ssc' (HEADER false);"
+    bcftools query --list-samples "${truth_vcf}" | sort > truth_samples
+    comm -12 ssc truth_samples > shared_samples.list
+    if [[ ! -s 'shared_samples.list' ]]; then
+      printf 'Start VCF and truth VCF have 0 shared samples\n' >&2
+      exit 1
+    fi
+  >>>
+
+  output {
+   File shared_samples = "shared_samples.list"
+  }
+}
+
+task SubsetStartVcf {
+  input {
+    File start_vcf
+    File sample_ids
+    String base_docker
+  }
+
+  Float disk_size = size(start_vcf, "GB") * 2 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -108,7 +160,6 @@ task SubsetStartVcf {
   }
 
   String subset_vcf_name = "ssc-${basename(start_vcf)}"
-  String kept_samples_name = "ssc_samples.list"
 
   command <<<
     set -o errexit
@@ -116,21 +167,15 @@ task SubsetStartVcf {
     set -o pipefail
 
     start_vcf='~{start_vcf}'
-    sample_table='~{sample_table}'
-    subset_vcf_name='~{subset_vcf_name}'
-    kept_samples_name='~{kept_samples_name}'
+    sample_ids='~{sample_ids}'
 
-    mv "${sample_table}" samples.tsv
-    duckdb ':memory:' "COPY (SELECT \"entity:sample_id\" FROM 'samples.tsv' WHERE cohort_short = 'SSC') TO 'ssc' (HEADER false);"
-    bcftools view --samples-file ssc --force-samples --write-index=tbi \
+    bcftools view --samples-file "${sample_ids}" --write-index=tbi \
       --output "${subset_vcf_name}" --output-type z "${start_vcf}"
-    bcftools query --list-samples "${subset_vcf_name}" > "${kept_samples_name}"
   >>>
 
   output {
     File subset_vcf = "${subset_vcf_name}"
     File subset_vcf_index = "${subset_vcf_name}.tbi"
-    File kept_samples = "${kept_samples_name}"
   }
 }
 

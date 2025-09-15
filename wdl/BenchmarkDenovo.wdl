@@ -5,55 +5,97 @@ workflow BenchmarkDenovo {
   input {
     # See benchmark_denovo.R
     File denovos
-    # The "true" de novo calls. Must be subset to the samples of interest.
+    File sample_table
+    # The "true" de novo calls
     File truth_vcf
     File truth_vcf_index
-    # VCFs that were run through the de novo pipeline
+    # VCFs that were run through the de novo pipeline split by contig
     Array[File] start_vcfs
+    File contigs
     File reference_dict
 
     String base_docker
     String gatk_docker
   }
 
-  scatter (vcf in start_vcfs) {
+  Array[String] contigs_arr = read_lines(contigs)
+
+  scatter (i in range(length(contigs_arr))) {
     call SubsetStartVcf {
       input:
-        start_vcf = vcf,
-        truth_vcf = truth_vcf,
+        start_vcf = start_vcfs[i],
+        sample_table = sample_table,
+        base_docker = base_docker
+    }
+
+    call MakeDenovoVcf {
+      input:
+        subset_start_vcf = SubsetStartVcf.subset_vcf,
         denovos = denovos,
+        base_docker = base_docker
+    }
+
+    call SubsetTruthVcf {
+      input:
+        truth_vcf = truth_vcf,
+        truth_vcf_index = truth_vcf_index,
+        sample_ids = SubsetStartVcf.kept_samples,
+        contig = contigs_arr[i],
         base_docker = base_docker
     }
 
     call SVConcordance {
       input:
-        eval_vcf = SubsetStartVcf.denovo_subset_vcf,
-        eval_vcf_index = SubsetStartVcf.denovo_subset_vcf_index,
-        truth_vcf = truth_vcf,
-        truth_vcf_index = truth_vcf_index,
-        start_vcf = SubsetStartVcf.sample_subset_vcf,
-        start_vcf_index = SubsetStartVcf.sample_subset_vcf_index,
+        eval_vcf = MakeDenovoVcf.denovo_vcf,
+        eval_vcf_index = MakeDenovoVcf.denovo_vcf_index,
+        truth_vcf = SubsetTruthVcf.subset_vcf,
+        truth_vcf_index = SubsetTruthVcf.subset_vcf_index,
+        start_vcf = SubsetStartVcf.subset_vcf,
+        start_vcf_index = SubsetStartVcf.subset_vcf_index,
         reference_dict = reference_dict,
         gatk_docker = gatk_docker
     }
   }
 
+  call ConcatVcfs as concat_eval_in_truth {
+    input:
+      vcfs = SVConcordance.eval_in_truth_vcf,
+      concat_prefix = "eval_in_truth",
+      base_docker = base_docker
+  }
+
+  call ConcatVcfs as concat_truth_in_eval {
+    input:
+      vcfs = SVConcordance.truth_in_eval_vcf,
+      concat_prefix = "truth_in_eval",
+      base_docker = base_docker
+  }
+
+  call ConcatVcfs as concat_truth_in_start {
+    input:
+      vcfs = SVConcordance.truth_in_start_vcf,
+      concat_prefix = "truth_in_start",
+      base_docker = base_docker
+  }
+
   output {
-    Array[File] truth_in_eval_vcfs = SVConcordance.truth_in_eval_vcf
-    Array[File] eval_in_truth_vcfs = SVConcordance.eval_in_truth_vcf
-    Array[File] truth_in_start_vcfs = SVConcordance.truth_in_start_vcf
+    File eval_in_truth_vcf = concat_eval_in_truth.concat_vcf
+    File eval_in_truth_vcf_index = concat_eval_in_truth.concat_vcf_index
+    File truth_in_eval_vcf = concat_truth_in_eval.concat_vcf
+    File truth_in_eval_vcf_index = concat_truth_in_eval.concat_vcf_index
+    File truth_in_start_vcf = concat_truth_in_start.concat_vcf
+    File truth_in_start_vcf_index = concat_truth_in_start.concat_vcf_index
   }
 }
 
 task SubsetStartVcf {
   input {
     File start_vcf
-    File truth_vcf
-    File denovos
+    File sample_table
     String base_docker
   }
 
-  Float disk_size = size([start_vcf, truth_vcf, denovos], "GB") * 2 + 16
+  Float disk_size = size([start_vcf, sample_table], "GB") * 2 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -65,43 +107,127 @@ task SubsetStartVcf {
     preemptible: 3
   }
 
-  String sample_subset_name = "start-${basename(start_vcf)}"
-  String denovo_subset_name = "denovo-${basename(start_vcf)}"
+  String subset_vcf_name = "ssc-${basename(start_vcf)}"
+  String kept_samples_name = "ssc_samples.list"
 
   command <<<
     set -o errexit
     set -o nounset
     set -o pipefail
 
-    bcftools query --list-samples '~{truth_vcf}' > truth_samples
-    gzip -cd '~{denovos}' \
-      | awk -F'\t' 'function check(col) {
-          if (!(col in Header)) {
-            print "required column \047" col "\047 is missing" > "/dev/stderr"
-            exit 1
-          }
-        }
-        NR==1{for(i=1;i<=NF;++i){Header[$i]=i}}
-        NR==2{check("name");check("sample");check("is_de_novo")}
-        NR>1 && $(Header["is_de_novo"]) == "TRUE"{print $(Header["name"])"\t"$(Header["sample"])}' \
-      | LC_ALL=C sort -u > denovo_vids
+    start_vcf='~{start_vcf}'
+    sample_table='~{sample_table}'
+    subset_vcf_name='~{subset_vcf_name}'
+    kept_samples_name='~{kept_samples_name}'
+
+    mv "${sample_table}" samples.tsv
+    duckdb ':memory:' "COPY (SELECT \"entity:sample_id\" FROM 'samples.tsv' WHERE cohort_short = 'SSC') TO 'ssc' (HEADER false);"
+    bcftools view --samples-file ssc --force-samples --write-index=tbi \
+      --output "${subset_vcf_name}" --output-type z "${start_vcf}"
+    bcftools query --list-samples "${subset_vcf_name}" > "${kept_samples_name}"
+  >>>
+
+  output {
+    File subset_vcf = "${subset_vcf_name}"
+    File subset_vcf_index = "${subset_vcf_name}.tbi"
+    File kept_samples = "${kept_samples_name}"
+  }
+}
+
+task SubsetTruthVcf {
+  input {
+    File truth_vcf
+    File truth_vcf_index
+    File sample_ids
+    String contig
+    String base_docker
+  }
+
+  Float disk_size = size([sample_ids, truth_vcf], "GB") * 2 + 16
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk ${ceil(disk_size)} HDD"
+    docker: base_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  String subset_vcf_name = "${contig}-${basename(truth_vcf)}"
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    truth_vcf='~{truth_vcf}'
+    sample_ids='~{sample_ids}'
+    contig='~{contig}'
+    subset_vcf_name='~{subset_vcf_name}'
+
+    bcftools view --samples-file "${sample_ids}" --output "${subset_vcf_name}" \
+      --regions "${contig}" --output-type z --write-index=tbi "${truth_vcf}"
+  >>>
+
+  output {
+    File subset_vcf = subset_vcf_name
+    File subset_vcf_index = "${subset_vcf_name}.tbi"
+  }
+}
+
+task MakeDenovoVcf {
+  input {
+    File subset_start_vcf
+    File denovos
+    String base_docker
+  }
+
+  Float disk_size = size([subset_start_vcf, denovos], "GB") * 2 + 16
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk ${ceil(disk_size)} HDD"
+    docker: base_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  String denovo_vcf_name = "denovo-${basename(subset_start_vcf)}"
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    subset_start_vcf='~{subset_start_vcf}'
+    denovos='~{denovos}'
+    denovo_vcf_name='~{denovo_vcf_name}'
+
+    mv "${denovos}" denovos.tsv.gz
+    cat > commands.sql <<EOF
+    COPY (
+      SELECT DISTINCT "name", "sample"
+      FROM 'denovos.tsv.gz'
+      WHERE is_de_novo = 'TRUE'
+    ) TO 'denovo_vids' (HEADER false);
+    EOF
+    duckdb ':memory:' < commands.sql
     if [[ ! -s denovo_vids ]]; then
       printf '%s\n' 'de novo output does not have any de novos' >&2
       exit 1
     fi
 
-    bcftools view --samples-file truth_samples --output '~{sample_subset_name}' \
-      --output-type z '~{start_vcf}'
-    bcftools index --tbi '~{sample_subset_name}'
-    set_denovo_gt '~{sample_subset_name}' denovo_vids '~{denovo_subset_name}'
-    bcftools index --tbi '~{denovo_subset_name}'
+    set_denovo_gt "${subset_start_vcf}" denovo_vids "${denovo_vcf_name}"
+    bcftools index --tbi "${denovo_vcf_name}"
   >>>
 
   output {
-    File denovo_subset_vcf = denovo_subset_name
-    File denovo_subset_vcf_index = "${denovo_subset_name}.tbi"
-    File sample_subset_vcf = sample_subset_name
-    File sample_subset_vcf_index = "${sample_subset_name}.tbi"
+    File denovo_vcf = denovo_vcf_name
+    File denovo_vcf_index = "${denovo_vcf_name}.tbi"
   }
 }
 
@@ -117,7 +243,7 @@ task SVConcordance {
     String gatk_docker
   }
 
-  Float disk_size = size([eval_vcf, truth_vcf], "GB") * 2 + 16
+  Float disk_size = size([eval_vcf, truth_vcf, start_vcf], "GB") * 3 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -129,14 +255,19 @@ task SVConcordance {
     preemptible: 3
   }
 
-  String truth_in_eval_name = "truth_in_eval-${basename(truth_vcf)}"
-  String eval_in_truth_name = "eval_in_truth-${basename(eval_vcf)}"
-  String truth_in_start_name = "truth_in_start-${basename(truth_vcf)}"
+  String eval_in_truth_name = "${basename(eval_vcf)}"
+  String truth_in_eval_name = "${basename(truth_vcf)}"
+  String truth_in_start_name = "${basename(truth_vcf)}"
 
   command <<<
     set -o errexit
     set -o nounset
     set -o pipefail
+
+    eval_vcf='~{eval_vcf}'
+    truth_vcf='~{truth_vcf}'
+    start_vcf='~{start_vcf}'
+    reference_dict='~{reference_dict}'
 
     gatk --java-options '-Xmx8000M' SVConcordance \
       --keep-all \
@@ -159,8 +290,50 @@ task SVConcordance {
   >>>
 
   output {
-    File truth_in_eval_vcf = "${truth_in_eval_name}"
     File eval_in_truth_vcf = "${eval_in_truth_name}"
+    File truth_in_eval_vcf = "${truth_in_eval_name}"
     File truth_in_start_vcf = "${truth_in_start_name}"
+  }
+}
+
+task ConcatVcfs {
+  input {
+    Array[File] vcfs
+    String concat_prefix
+    String base_docker
+  }
+
+  Float disk_size = size(vcfs, "GB") * 2 + 16
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk ${ceil(disk_size)} HDD"
+    docker: base_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  String concat_vcf_name = "${concat_prefix}.vcf.gz"
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    vcfs='~{write_lines(vcfs)}'
+
+    while read -r f; do
+      bcftools index "${f}"
+    done < "${vcfs}"
+
+    bcftools concat --file-list "${vcfs}" --output "${concat_vcf_name}" \
+      --output-type z --write-index=tbi
+  >>>
+
+  output {
+    File concat_vcf = concat_vcf_name
+    File concat_vcf_index = "${concat_vcf}.tbi"
   }
 }

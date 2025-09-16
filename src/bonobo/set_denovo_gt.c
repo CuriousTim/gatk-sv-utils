@@ -199,8 +199,8 @@ void update_genotypes(const bcf_hdr_t *hdr, bcf1_t *rec, khash_t(strset) *h)
 
 bool is_cnv(const bcf_hdr_t *hdr, bcf1_t *rec)
 {
-	char svtype[4] = {0, 0, 0, 0};
-	int n = 4;
+	char *svtype = 0;
+	int n = 0;
 	int ret = bcf_get_info_values(hdr, rec, "SVTYPE", (void **)&svtype, &n, BCF_HT_STR);
 	if (ret < 0) {
 		printf("%d\n", ret);
@@ -208,6 +208,7 @@ bool is_cnv(const bcf_hdr_t *hdr, bcf1_t *rec)
 	}
 
 	bool tmp = strcmp(svtype, "CNV") == 0;
+	free(svtype);
 
 	return tmp;
 }

@@ -127,8 +127,10 @@ task GetSharedSamples {
 
     mv "${sample_table}" samples.tsv
     duckdb ':memory:' "COPY (SELECT DISTINCT \"entity:sample_id\" FROM 'samples.tsv' WHERE cohort_short = 'SSC') TO 'ssc' (HEADER false);"
+    bcftools query --list-samples "${start_vcf}" | sort > start_samples
     bcftools query --list-samples "${truth_vcf}" | sort > truth_samples
-    comm -12 ssc truth_samples > shared_samples.list
+    comm -12 ssc start_samples > temp
+    comm -12 temp truth_samples > shared_samples.list
     if [[ ! -s 'shared_samples.list' ]]; then
       printf 'Start VCF and truth VCF have 0 shared samples\n' >&2
       exit 1

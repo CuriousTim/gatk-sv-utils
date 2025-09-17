@@ -157,7 +157,7 @@ task SubsetVcf {
     String base_docker
   }
 
-  Float disk_size = size([vcf, sample_ids, primary_contigs_fai], "GB") * 2 + 16
+  Float disk_size = size([vcf, sample_ids, primary_contigs_fai], "GB") * 3 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -182,9 +182,10 @@ task SubsetVcf {
     contig='~{if defined(contig) then "--regions ${contig}" else ""}'
     subset_vcf_name='~{subset_vcf_name}'
 
-    bcftools view --samples-file "${sample_ids}" --output "${subset_vcf_name}" \
+    bcftools view --samples-file "${sample_ids}" --output temp.vcf.gz \
       --output-type z ${contig} "${vcf}"
-    bcftools reheader --fai "${primary_contigs_fai}" "${subset_vcf_name}"
+    bcftools reheader --fai "${primary_contigs_fai}" --output "${subset_vcf_name}" \
+      temp.vcf.gz
     bcftools index --tbi "${subset_vcf_name}"
   >>>
 

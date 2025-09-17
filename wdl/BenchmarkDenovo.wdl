@@ -12,6 +12,7 @@ workflow BenchmarkDenovo {
     # VCFs that were run through the de novo pipeline split by contig
     Array[File]+ start_vcfs
     Array[File]+ start_vcf_indices
+    # The contigs must be in the same order as the VCFs
     File contigs
     File primary_contigs_fai
     File reference_dict
@@ -36,6 +37,7 @@ workflow BenchmarkDenovo {
         vcf = start_vcfs[i],
         vcf_index = start_vcf_indices[i],
         sample_ids = GetSharedSamples.shared_samples,
+        contig = contigs_arr[i],
         primary_contigs_fai = primary_contigs_fai,
         base_docker = base_docker
     }
@@ -152,12 +154,12 @@ task SubsetVcf {
     File vcf
     File vcf_index
     File sample_ids
+    String contig
     File primary_contigs_fai
-    String? contig
     String base_docker
   }
 
-  Float disk_size = size([vcf, sample_ids, primary_contigs_fai], "GB") * 3 + 16
+  Float disk_size = size([vcf, sample_ids], "GB") * 3 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -178,14 +180,21 @@ task SubsetVcf {
 
     vcf='~{vcf}'
     sample_ids='~{sample_ids}'
+    contig='~{contig}'
     primary_contigs_fai='~{primary_contigs_fai}'
-    contig='~{if defined(contig) then "--regions ${contig}" else ""}'
     subset_vcf_name='~{subset_vcf_name}'
 
     bcftools view --samples-file "${sample_ids}" --output temp.vcf.gz \
-      --output-type z ${contig} "${vcf}"
-    bcftools reheader --fai "${primary_contigs_fai}" --output "${subset_vcf_name}" \
-      temp.vcf.gz
+      --output-type z --regions "${contig}" "${vcf}"
+
+    bcftools head temp.vcf.gz \
+      | awk '/^#CHROM/{print > "samples"; next} /^##contig/{next} {print > "newheader"}'
+
+    gawk -F'\t' '{print "##contig=<ID="$1",length="$2">"}' \
+      "${primary_contigs_fai}" >> newheader
+    cat samples >> newheader
+
+    bcftools reheader --header newheader --output "${subset_vcf_name}" temp.vcf.gz
     bcftools index --tbi "${subset_vcf_name}"
   >>>
 

@@ -11,7 +11,9 @@ workflow BenchmarkDenovo {
     File truth_vcf_index
     # VCFs that were run through the de novo pipeline split by contig
     Array[File]+ start_vcfs
+    Array[File]+ start_vcf_indices
     File contigs
+    File primary_contigs_fai
     File reference_dict
 
     String base_docker
@@ -29,25 +31,28 @@ workflow BenchmarkDenovo {
   }
 
   scatter (i in range(length(contigs_arr))) {
-    call SubsetStartVcf {
+    call SubsetVcf as subset_start {
       input:
-        start_vcf = start_vcfs[i],
+        vcf = start_vcfs[i],
+        vcf_index = start_vcf_indices[i],
         sample_ids = GetSharedSamples.shared_samples,
+        primary_contigs_fai = primary_contigs_fai,
         base_docker = base_docker
     }
 
-    call SubsetTruthVcf {
+    call SubsetVcf as subset_truth {
       input:
-        truth_vcf = truth_vcf,
-        truth_vcf_index = truth_vcf_index,
+        vcf = truth_vcf,
+        vcf_index = truth_vcf_index,
         sample_ids = GetSharedSamples.shared_samples,
         contig = contigs_arr[i],
+        primary_contigs_fai = primary_contigs_fai,
         base_docker = base_docker
     }
 
     call MakeDenovoVcf {
       input:
-        subset_start_vcf = SubsetStartVcf.subset_vcf,
+        subset_start_vcf = subset_start.subset_vcf,
         denovos = denovos,
         base_docker = base_docker
     }
@@ -56,10 +61,10 @@ workflow BenchmarkDenovo {
       input:
         eval_vcf = MakeDenovoVcf.denovo_vcf,
         eval_vcf_index = MakeDenovoVcf.denovo_vcf_index,
-        truth_vcf = SubsetTruthVcf.subset_vcf,
-        truth_vcf_index = SubsetTruthVcf.subset_vcf_index,
-        start_vcf = SubsetStartVcf.subset_vcf,
-        start_vcf_index = SubsetStartVcf.subset_vcf_index,
+        truth_vcf = subset_truth.subset_vcf,
+        truth_vcf_index = subset_truth.subset_vcf_index,
+        start_vcf = subset_start.subset_vcf,
+        start_vcf_index = subset_start.subset_vcf_index,
         reference_dict = reference_dict,
         gatk_docker = gatk_docker
     }
@@ -142,14 +147,17 @@ task GetSharedSamples {
   }
 }
 
-task SubsetStartVcf {
+task SubsetVcf {
   input {
-    File start_vcf
+    File vcf
+    File vcf_index
     File sample_ids
+    File primary_contigs_fai
+    String? contig
     String base_docker
   }
 
-  Float disk_size = size(start_vcf, "GB") * 2 + 16
+  Float disk_size = size([vcf, sample_ids, primary_contigs_fai], "GB") * 2 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -161,62 +169,23 @@ task SubsetStartVcf {
     preemptible: 3
   }
 
-  String subset_vcf_name = "ssc-${basename(start_vcf)}"
+  String subset_vcf_name = "subset-${basename(vcf)}"
 
   command <<<
     set -o errexit
     set -o nounset
     set -o pipefail
 
-    start_vcf='~{start_vcf}'
+    vcf='~{vcf}'
     sample_ids='~{sample_ids}'
-    subset_vcf_name='~{subset_vcf_name}'
-
-    bcftools view --samples-file "${sample_ids}" --write-index=tbi \
-      --output "${subset_vcf_name}" --output-type z "${start_vcf}"
-  >>>
-
-  output {
-    File subset_vcf = "${subset_vcf_name}"
-    File subset_vcf_index = "${subset_vcf_name}.tbi"
-  }
-}
-
-task SubsetTruthVcf {
-  input {
-    File truth_vcf
-    File truth_vcf_index
-    File sample_ids
-    String contig
-    String base_docker
-  }
-
-  Float disk_size = size([sample_ids, truth_vcf], "GB") * 2 + 16
-
-  runtime {
-    bootDiskSizeGb: 8
-    cpus: 1
-    disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: base_docker
-    maxRetries: 1
-    memory: "4 GiB"
-    preemptible: 3
-  }
-
-  String subset_vcf_name = "${contig}-${basename(truth_vcf)}"
-
-  command <<<
-    set -o errexit
-    set -o nounset
-    set -o pipefail
-
-    truth_vcf='~{truth_vcf}'
-    sample_ids='~{sample_ids}'
-    contig='~{contig}'
+    primary_contigs_fai='~{primary_contigs_fai}'
+    contig='~{if defined(contig) then "--regions ${contig}" else ""}'
     subset_vcf_name='~{subset_vcf_name}'
 
     bcftools view --samples-file "${sample_ids}" --output "${subset_vcf_name}" \
-      --regions "${contig}" --output-type z --write-index=tbi "${truth_vcf}"
+      --output-type z ${contig} "${vcf}"
+    bcftools reheader --fai "${primary_contigs_fai}" "${subset_vcf_name}"
+    bcftools index --tbi "${subset_vcf_name}"
   >>>
 
   output {

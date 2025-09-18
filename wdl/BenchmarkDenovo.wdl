@@ -346,7 +346,7 @@ task SVConcordance {
       --sequence-dictionary "${reference_dict}" \
       --eval "${eval_vcf}" \
       --truth "${truth_vcf}" \
-      --output '~{eval_in_truth_name}'
+      --output '~{eval_in_truth_name}' \
       --stratify-config stratify.tsv \
       --clustering-config cluster.tsv
     gatk --java-options '-Xmx8000M' SVConcordance \
@@ -360,7 +360,7 @@ task SVConcordance {
     gatk --java-options '-Xmx8000M' SVConcordance \
       --eval "${truth_vcf}" \
       --truth "${start_vcf}" \
-      --output '~{truth_in_start_name}'
+      --output '~{truth_in_start_name}' \
       --keep-all \
       --sequence-dictionary "${reference_dict}" \
       --stratify-config stratify.tsv \

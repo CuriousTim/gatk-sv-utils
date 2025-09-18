@@ -13,15 +13,28 @@ workflow BenchmarkDenovo {
     Array[File]+ start_vcfs
     Array[File]+ start_vcf_indices
     # The contigs must be in the same order as the VCFs
-    File contigs
+    Array[String] contigs = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6",
+          "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15",
+          "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX"]
     File primary_contigs_fai
     File reference_dict
+
+    Float small_cnv_reciprocal_ovp = 0.1
+    Float small_cnv_size_sim = 0
+    Int small_cnv_breakend_win = 300
+    Float large_cnv_reciprocal_ovp = 0.8
+    Float large_cnv_size_sim = 0
+    Int large_cnv_breakend_win = 10000000
+    Float inv_reciprocal_ovp = 0.1
+    Float inv_size_sim = 0
+    Int inv_breakend_win = 300
+    Float ins_reciprocal_ovp = 0
+    Float ins_size_sim = 0
+    Int ins_breakend_win = 300
 
     String base_docker
     String gatk_docker
   }
-
-  Array[String] contigs_arr = read_lines(contigs)
 
   call GetSharedSamples {
     input:
@@ -31,13 +44,13 @@ workflow BenchmarkDenovo {
       base_docker = base_docker
   }
 
-  scatter (i in range(length(contigs_arr))) {
+  scatter (i in range(length(contigs))) {
     call SubsetVcf as subset_start {
       input:
         vcf = start_vcfs[i],
         vcf_index = start_vcf_indices[i],
         sample_ids = GetSharedSamples.shared_samples,
-        contig = contigs_arr[i],
+        contig = contigs[i],
         primary_contigs_fai = primary_contigs_fai,
         base_docker = base_docker
     }
@@ -47,7 +60,7 @@ workflow BenchmarkDenovo {
         vcf = truth_vcf,
         vcf_index = truth_vcf_index,
         sample_ids = GetSharedSamples.shared_samples,
-        contig = contigs_arr[i],
+        contig = contigs[i],
         primary_contigs_fai = primary_contigs_fai,
         base_docker = base_docker
     }
@@ -70,36 +83,20 @@ workflow BenchmarkDenovo {
         reference_dict = reference_dict,
         gatk_docker = gatk_docker
     }
-  }
 
-  call ConcatVcfs as concat_eval_in_truth {
-    input:
-      vcfs = SVConcordance.eval_in_truth_vcf,
-      concat_prefix = "eval_in_truth",
-      base_docker = base_docker
-  }
-
-  call ConcatVcfs as concat_truth_in_eval {
-    input:
-      vcfs = SVConcordance.truth_in_eval_vcf,
-      concat_prefix = "truth_in_eval",
-      base_docker = base_docker
-  }
-
-  call ConcatVcfs as concat_truth_in_start {
-    input:
-      vcfs = SVConcordance.truth_in_start_vcf,
-      concat_prefix = "truth_in_start",
-      base_docker = base_docker
+    call CountConcordance {
+      input:
+        eval_in_truth_vcf = SVConcordance.eval_in_truth_vcf,
+        truth_in_eval_vcf = SVConcordance.truth_in_eval_vcf,
+        truth_in_start_vcf =  SVConcordance.truth_in_start_vcf,
+        start_vcf = subset_start.subset_vcf,
+        base_docker = base_docker
+    }
   }
 
   output {
-    File eval_in_truth_vcf = concat_eval_in_truth.concat_vcf
-    File eval_in_truth_vcf_index = concat_eval_in_truth.concat_vcf_index
-    File truth_in_eval_vcf = concat_truth_in_eval.concat_vcf
-    File truth_in_eval_vcf_index = concat_truth_in_eval.concat_vcf_index
-    File truth_in_start_vcf = concat_truth_in_start.concat_vcf
-    File truth_in_start_vcf_index = concat_truth_in_start.concat_vcf_index
+    Array[File] eval_in_truth_counts = CountConcordance.eval_in_truth_counts
+    Array[File] truth_in_eval_counts = CountConcordance.truth_in_eval_counts
   }
 }
 
@@ -184,8 +181,14 @@ task SubsetVcf {
     primary_contigs_fai='~{primary_contigs_fai}'
     subset_vcf_name='~{subset_vcf_name}'
 
-    bcftools view --samples-file "${sample_ids}" --output temp.vcf.gz \
-      --output-type z --regions "${contig}" "${vcf}"
+    # CPX, CTX, CNV, and BND are excluded from benchmarking
+    # INFO/ALGORITHMS field is set to pesr for all sites so sites will not be
+    # matched according to algorithm, but SVConcordance will accept the VCF
+    bcftools view --samples-file "${sample_ids}" --regions "${contig}" \
+      --exclude 'INFO/SVTYPE == "CPX" || INFO/SVTYPE == "CTX" || INFO/SVTYPE == "CNV" || INFO/SVTYPE == "BND"' \
+      "${vcf}" \
+      | gawk -f /opt/gatk-sv-utils/scripts/set_vcf_algorithms.awk - \
+      | bgzip -c > temp.vcf.gz
 
     bcftools head temp.vcf.gz \
       | awk '/^#CHROM/{print > "samples"; next} /^##contig/{next} {print > "newheader"}'
@@ -267,6 +270,20 @@ task SVConcordance {
     File start_vcf
     File start_vcf_index
     File reference_dict
+
+    Float small_cnv_reciprocal_ovp
+    Float small_cnv_size_sim
+    Int small_cnv_breakend_win
+    Float large_cnv_reciprocal_ovp
+    Float large_cnv_size_sim
+    Int large_cnv_breakend_win
+    Float inv_reciprocal_ovp
+    Float inv_size_sim
+    Int inv_breakend_win
+    Float ins_reciprocal_ovp
+    Float ins_size_sim
+    Int ins_breakend_win
+
     String gatk_docker
   }
 
@@ -296,41 +313,65 @@ task SVConcordance {
     start_vcf='~{start_vcf}'
     reference_dict='~{reference_dict}'
 
+    printf 'NAME\tSVTYPE\tMIN_SIZE\tMAX_SIZE\tTRACKS\n' > stratify.tsv
+    printf 'DEL_small\tDEL\t-1\t5000\tNULL\n' >> stratify.tsv
+    printf 'DUP_small\tDUP\t-1\t5000\tNULL\n' >> stratify.tsv
+    printf 'DEL_large\tDEL\t5000\t-1\tNULL\n' >> stratify.tsv
+    printf 'DUP_large\tDUP\t5000\t-1\tNULL\n' >> stratify.tsv
+    printf 'INV\tINV\t-1\t-1\tNULL\n' >> stratify.tsv
+    printf 'INS\tINS\t-1\t-1\tNULL\n' >> stratify.tsv
+
+    printf 'NAME\tRECIPROCAL_OVERLAP\tSIZE_SIMILARITY\tBREAKEND_WINDOW\tSAMPLE_OVERLAP\n' > cluster.tsv
+    printf 'DEL_small\t%0.1f\t%0.1f\t%d\t0\n' ~{small_cnv_reciprocal_ovp} ~{small_cnv_size_sim} ~{small_cnv_breakend_win} >> cluster.tsv
+    printf 'DUP_small\t%0.1f\t%0.1f\t%d\t0\n' ~{small_cnv_reciprocal_ovp} ~{small_cnv_size_sim} ~{small_cnv_breakend_win} >> cluster.tsv
+    printf 'DEL_large\t%0.1f\t%0.1f\t%d\t0\n' ~{large_cnv_reciprocal_ovp} ~{large_cnv_size_sim} ~{large_cnv_breakend_win} >> cluster.tsv
+    printf 'DUP_large\t%0.1f\t%0.1f\t%d\t0\n' ~{large_cnv_reciprocal_ovp} ~{large_cnv_size_sim} ~{large_cnv_breakend_win} >> cluster.tsv
+    printf 'INV\t%0.1f\t%0.1f\t%d\t0\n' ~{inv_reciprocal_ovp} ~{inv_size_sim} ~{inv_breakend_win} >> cluster.tsv
+    printf 'INS\t%0.1f\t%0.1f\t%d\t0\n' ~{ins_reciprocal_ovp} ~{ins_size_sim} ~{ins_breakend_win} >> cluster.tsv
+
     gatk --java-options '-Xmx8000M' SVConcordance \
       --keep-all \
-      --sequence-dictionary '~{reference_dict}' \
-      --eval '~{eval_vcf}' \
-      --truth '~{truth_vcf}' \
+      --sequence-dictionary "${reference_dict}" \
+      --eval "${eval_vcf}" \
+      --truth "${truth_vcf}" \
       --output '~{eval_in_truth_name}'
+      --stratify-config stratify.tsv \
+      --clustering-config cluster.tsv
     gatk --java-options '-Xmx8000M' SVConcordance \
+      --eval "${truth_vcf}" \
+      --truth "${eval_vcf}" \
+      --output '~{truth_in_eval_name}' \
       --keep-all \
-      --sequence-dictionary '~{reference_dict}' \
-      --eval '~{truth_vcf}' \
-      --truth '~{eval_vcf}' \
-      --output '~{truth_in_eval_name}'
+      --sequence-dictionary "${reference_dict}" \
+      --stratify-config stratify.tsv \
+      --clustering-config cluster.tsv
     gatk --java-options '-Xmx8000M' SVConcordance \
-      --keep-all \
-      --sequence-dictionary '~{reference_dict}' \
-      --eval '~{truth_vcf}' \
-      --truth '~{start_vcf}' \
+      --eval "${truth_vcf}" \
+      --truth "${start_vcf}" \
       --output '~{truth_in_start_name}'
+      --keep-all \
+      --sequence-dictionary "${reference_dict}" \
+      --stratify-config stratify.tsv \
+      --clustering-config cluster.tsv
   >>>
 
   output {
-    File eval_in_truth_vcf = "${eval_in_truth_name}"
-    File truth_in_eval_vcf = "${truth_in_eval_name}"
-    File truth_in_start_vcf = "${truth_in_start_name}"
+    File eval_in_truth_vcf = eval_in_truth_name
+    File truth_in_eval_vcf = truth_in_eval_name
+    File truth_in_start_vcf = truth_in_start_name
   }
 }
 
-task ConcatVcfs {
+task CountConcordance {
   input {
-    Array[File] vcfs
-    String concat_prefix
+    File eval_in_truth_vcf
+    File truth_in_eval_vcf
+    File truth_in_start_vcf
+    File start_vcf
     String base_docker
   }
 
-  Float disk_size = size(vcfs, "GB") * 2 + 16
+  Float disk_size = size([eval_in_truth_vcf, truth_in_eval_vcf, truth_in_start_vcf, start_vcf], "GB") * 2 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -342,25 +383,37 @@ task ConcatVcfs {
     preemptible: 3
   }
 
-  String concat_vcf_name = "${concat_prefix}.vcf.gz"
-
   command <<<
     set -o errexit
     set -o nounset
     set -o pipefail
 
-    vcfs='~{write_lines(vcfs)}'
+    eval_in_truth_vcf='~{eval_in_truth_vcf}'
+    truth_in_eval_vcf='~{truth_in_eval_vcf}'
+    truth_in_start_vcf='~{truth_in_start_vcf}'
+    start_vcf='~{start_vcf}'
 
-    while read -r f; do
-      bcftools index "${f}"
-    done < "${vcfs}"
+    bcftools query --include 'GT="alt"' \
+      --format '%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/TRUTH_VID[\t%SAMPLE]\n' \
+      "${eval_in_truth_vcf}" > 'eval.tsv'
+    bcftools query --include 'GT="alt"' \
+      --format '%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/TRUTH_VID[\t%SAMPLE]\n' \
+      "${truth_in_eval_vcf}" > 'truth.tsv'
+    bcftools query --include 'INFO/TRUTH_VID != "."' \
+      --format '%ID\t%TRUTH_VID\n' \
+      "${truth_in_start_vcf}" > 'truth_in_start.tsv'
 
-    bcftools concat --file-list "${vcfs}" --output "${concat_vcf_name}" \
-      --output-type z --write-index=tbi
+    cut -f 2 'truth_in_start.tsv' | tr ',' '\n' | LC_ALL=C sort -u > start_vcf_vids
+
+    bcftools query --include 'ID=@start_vcf_vids & GT="alt"' \
+      --format '%ID[\t%SAMPLE]\n' "${start_vcf}" > 'start.tsv'
+
+    gawk -f /opt/gatk-sv-utils/scripts/benchmark_denovo.awk \
+      'eval.tsv' 'truth_in_start.tsv' 'truth.tsv' 'start.tsv'
   >>>
 
   output {
-    File concat_vcf = concat_vcf_name
-    File concat_vcf_index = "${concat_vcf}.tbi"
+    File eval_in_truth_counts = "eval_vs_truth.tsv"
+    File truth_in_eval_counts = "truth_vs_eval.tsv"
   }
 }

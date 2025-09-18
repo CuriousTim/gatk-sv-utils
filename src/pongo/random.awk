@@ -3,7 +3,7 @@
 #' Generate a random integer between 1 and `n`, inclusive.
 #'
 #' @param n Maximum.
-#' @return Random integer between 1 and `n`, inclusive. If `n` is negative,
+#' @return Random integer between 1 and `n`, inclusive. If `n` is not positive,
 #'   the function will return 0.
 function unif(n) {
 	if (n <= 0) {
@@ -95,7 +95,7 @@ function _sample_replace(m, n, arr,    i) {
 #
 # The algorithm starts with an empty set of selected values and a set of
 # candidate values with a cardinality equal to n - m. At each iteration, a new
-# value is added the candidates set and then a random value from the set is
+# value is added to the candidates set and then a random value from the set is
 # added to the selected set. This continues until the selected set has m
 # values. There is likely some complicated math needed prove that sampling is
 # truly random, so I am going to trust Mr. Floyd on this.

@@ -81,6 +81,18 @@ workflow BenchmarkDenovo {
         start_vcf = subset_start.subset_vcf,
         start_vcf_index = subset_start.subset_vcf_index,
         reference_dict = reference_dict,
+        small_cnv_reciprocal_ovp = small_cnv_reciprocal_ovp,
+        small_cnv_size_sim = small_cnv_size_sim,
+        small_cnv_breakend_win = small_cnv_breakend_win,
+        large_cnv_reciprocal_ovp = large_cnv_reciprocal_ovp,
+        large_cnv_size_sim = large_cnv_size_sim,
+        large_cnv_breakend_win = large_cnv_breakend_win,
+        inv_reciprocal_ovp = inv_reciprocal_ovp,
+        inv_size_sim = inv_size_sim,
+        inv_breakend_win = inv_breakend_win,
+        ins_reciprocal_ovp = ins_reciprocal_ovp,
+        ins_size_sim = ins_size_sim,
+        ins_breakend_win = ins_breakend_win,
         gatk_docker = gatk_docker
     }
 

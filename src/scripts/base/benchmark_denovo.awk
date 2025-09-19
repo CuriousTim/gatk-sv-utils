@@ -75,9 +75,9 @@ BEGIN {
 	FS = "\t"
 	OFS = "\t"
 
-	read_gts(ARGV[1], 4, 6, Eval_gts)
-	read_gts(ARGV[3], 4, 6, Truth_gts)
-	read_gts(ARGV[4], 1, 2, Start_gts)
+	read_gts(ARGV[1], Eval_gts, 4, 6)
+	read_gts(ARGV[3], Truth_gts, 4, 6)
+	read_gts(ARGV[4], Start_gts, 1, 2)
 
 	--ARGC
 }
@@ -138,7 +138,7 @@ function read_gts(file, arr, vid_col, sid_col,    line, n, vid, fields, i) {
 		n = split(line, fields, /\t/)
 		vid = fields[vid_col]
 		for (i = sid_col; i <= n; ++i)
-			arr[vid][$i]
+			arr[vid][fields[i]]
 	}
 	close(file)
 }

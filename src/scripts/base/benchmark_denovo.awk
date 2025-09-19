@@ -133,7 +133,7 @@ ARGIND == 3 {
 	print $1, $2, $3, $4, fn1, fn2 > "truth_vs_eval.tsv"
 }
 
-function read_gts(file, arr, vid_col, sid_col    line, n, vid, fields, i) {
+function read_gts(file, arr, vid_col, sid_col,    line, n, vid, fields, i) {
 	while ((getline line < file) > 0) {
 		n = split(line, fields, /\t/)
 		vid = fields[vid_col]

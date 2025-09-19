@@ -18,6 +18,10 @@ workflow BenchmarkDenovo {
           "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX"]
     File primary_contigs_fai
     File reference_dict
+    File sr_bed
+    File rm_bed
+    File sd_bed
+    File gencode_gff
 
     Float small_cnv_reciprocal_ovp = 0.1
     Float small_cnv_size_sim = 0
@@ -34,6 +38,7 @@ workflow BenchmarkDenovo {
 
     String base_docker
     String gatk_docker
+    String r_docker
   }
 
   call GetSharedSamples {
@@ -106,9 +111,19 @@ workflow BenchmarkDenovo {
     }
   }
 
+  call MakePlots {
+    input:
+      eval_in_truth_counts = CountConcordance.eval_in_truth_counts,
+      truth_in_eval_counts = CountConcordance.truth_in_eval_counts,
+      sr_bed = sr_bed,
+      rm_bed = rm_bed,
+      sd_bed = sd_bed,
+      gencode_gff = gencode_gff,
+      r_docker = r_docker
+  }
+
   output {
-    Array[File] eval_in_truth_counts = CountConcordance.eval_in_truth_counts
-    Array[File] truth_in_eval_counts = CountConcordance.truth_in_eval_counts
+    File benchmark_plots = MakePlots.benchmark_plots
   }
 }
 
@@ -427,5 +442,60 @@ task CountConcordance {
   output {
     File eval_in_truth_counts = "eval_vs_truth.tsv"
     File truth_in_eval_counts = "truth_vs_eval.tsv"
+  }
+}
+
+task MakePlots {
+  input {
+    Array[File] eval_in_truth_counts
+    Array[File] truth_in_eval_counts
+    File sr_bed
+    File rm_bed
+    File sd_bed
+    File gencode_gff
+    String r_docker
+  }
+
+  Float disk_size = size(eval_in_truth_counts, "GB") + size(truth_in_eval_counts, "GB") + 32
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk ${ceil(disk_size)} HDD"
+    docker: r_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    eval_in_truth_counts='~{write_lines(eval_in_truth_counts)}'
+    truth_in_eval_counts='~{write_lines(truth_in_eval_counts)}'
+    sr_bed='~{sr_bed}'
+    rm_bed='~{rm_bed}'
+    sd_bed='~{sd_bed}'
+    gencode_gff='~{gencode_gff}'
+
+    mv "${sr_bed}" hg38_SR.bed.gz
+    mv "${rm_bed}" hg38_RM.bed.gz
+    mv "${sd_bed}" hg38_SD.bed.gz
+    mv "${gencode_gff}" gencode.v49.basic.annotation.gff3.gz
+
+    cat "${eval_in_truth_counts}" | xargs cat > eval_vs_truth.tsv
+    cat "${truth_in_eval_counts}" | xargs cat > truth_vs_eval.tsv
+
+    Rscript /opt/gatk-sv-utils/scripts/benchmark_denovo.R
+
+    mkdir denovo_benchmark
+    mv *.jpg denovo_benchmark
+    tar -czf denovo_benchmark.tar.gz denovo_benchmark
+  >>>
+
+  output {
+    File benchmark_plots = "denovo_benchmark.tar.gz"
   }
 }

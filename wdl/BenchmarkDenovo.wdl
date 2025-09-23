@@ -222,7 +222,7 @@ task SubsetVcf {
       --exclude 'INFO/SVTYPE == "BND"' --output "${subset_vcf_name}" \
       --output-type z "${vcf}"
     bcftools index --tbi "${subset_vcf_name}"
-    bcftools view
+    bcftools view \
       --exclude 'INFO/SVTYPE == "CPX" || INFO/SVTYPE == "CTX" || INFO/SVTYPE == "CNV"' \
       "${subset_vcf_name}" \
       | gawk -f /opt/gatk-sv-utils/scripts/set_vcf_algorithms.awk - \

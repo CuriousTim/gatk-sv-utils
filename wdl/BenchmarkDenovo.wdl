@@ -464,7 +464,7 @@ task MakePlots {
     disks: "local-disk ${ceil(disk_size)} HDD"
     docker: r_docker
     maxRetries: 1
-    memory: "4 GiB"
+    memory: "16 GiB"
     preemptible: 3
   }
 

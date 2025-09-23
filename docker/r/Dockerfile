@@ -3,6 +3,7 @@ FROM rocker/r-ver:4.5.1
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev \
+    zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN R -e 'withCallingHandlers(install.packages("remotes"), warning = function(w) stop(w))'

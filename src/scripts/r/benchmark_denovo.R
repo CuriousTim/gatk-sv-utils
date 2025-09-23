@@ -52,8 +52,8 @@ coverage <- function(query, subject) {
   cov
 }
 
-evt <- read.table("eval_vs_truth.tsv", sep = "\t", col.names = c("chr", "start", "end", "vid", "tp", "fp"))
-tve <- read.table("truth_vs_eval.tsv", sep = "\t", col.names = c("chr", "start", "end", "vid", "fn1", "fn2"))
+evt <- read.table("eval_vs_truth.tsv", sep = "\t", col.names = c("chr", "start", "end", "svtype", "vid", "tp", "fp"))
+tve <- read.table("truth_vs_eval.tsv", sep = "\t", col.names = c("chr", "start", "end", "svtype", "vid", "fn1", "fn2"))
 
 evt_gr <- as(evt, "GRanges")
 tve_gr <- as(tve, "GRanges")

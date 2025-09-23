@@ -36,10 +36,11 @@
 #   1. chromosome
 #   2. start
 #   3. end
-#   4. site ID
-#   5. comma-separated IDs of matching sites in the truth VCF, or "." for
+#   4. SV type
+#   5. site ID
+#   6. comma-separated IDs of matching sites in the truth VCF, or "." for
 #      missing
-#   6+ all remaning columns are IDs of samples that carry the SV
+#   7+ all remaning columns are IDs of samples that carry the SV
 #
 # <truth_v_start>: a TSV dump of the true de novos VCF after (truth vs start)
 #   1. site ID
@@ -55,31 +56,47 @@
 # For memory efficiency, the site IDs should be restricted to those that appear
 # in the second column of <truth>
 #
-# Two output files will be written.
+# Five output files will be written.
 #
 # eval_vs_truth.tsv
 # -----------------
-# The first four columns of <eval_v_truth> plus:
+# The first five columns of <eval_v_truth> plus:
 # * count of true positives at that site
 # * count of false positives at that site
 #
 # truth_vs_eval.tsv
 # -----------------
-# The first four columns of <truth_v_eval> plus:
+# The first five columns of <truth_v_eval> plus:
 # * count of genotypes in the truth VCF that matched a genotype in the start
 #   VCF, but not the eval VCF (false negative type 1)
 # * count of genotypes in the truth VCF that did not match a genotype in the
 #   start VCF (false negative type 2)
+#
+# false_positives.tsv
+# -------------------
+# All false positive de novo calls.
+#
+# false_negatives-type1.tsv
+# -------------------------
+# All type 1 false negative de novo calls.
+#
+# false_negatives-type2.tsv
+# -------------------------
+# All type 2 false negative de novo calls.
 
 BEGIN {
 	FS = "\t"
 	OFS = "\t"
 
-	read_gts(ARGV[1], Eval_gts, 4, 6)
-	read_gts(ARGV[3], Truth_gts, 4, 6)
+	read_gts(ARGV[1], Eval_gts, 5, 7)
+	read_gts(ARGV[3], Truth_gts, 5, 7)
 	read_gts(ARGV[4], Start_gts, 1, 2)
 
 	--ARGC
+
+	print "chr", "start", "end", "svtype", "vid", "samples" > "false_positive.tsv"
+	print "chr", "start", "end", "svtype", "vid", "samples" > "false_negatives-type1.tsv"
+	print "chr", "start", "end", "svtype", "vid", "samples" > "false_negatives-type2.tsv"
 }
 
 # check eval vs truth
@@ -89,18 +106,23 @@ ARGIND == 1 {
 	# this site in the eval VCF did not have any matching variants in the
 	# truth VCF
 	if ($5 == ".") {
-		fp += NF - 5
+		fp += NF - 6
+		for (i = 7; i <= NF; ++i) {
+			print $1, $2, $3, $4, $5, $i > "false_positives.tsv"
+		}
 	} else {
-		split($5, vids, /,/)
-		for (i = 6; i <= NF; ++i) {
-			if (has_match($i, vids, Truth_gts))
+		split($6, vids, /,/)
+		for (i = 7; i <= NF; ++i) {
+			if (has_match($i, vids, Truth_gts)) {
 				++tp
-			else
+			} else {
 				++fp
+				print $1, $2, $3, $4, $5, $i > "false_positives.tsv"
+			}
 		}
 	}
 
-	print $1, $2, $3, $4, tp, fp > "eval_vs_truth.tsv"
+	print $1, $2, $3, $4, $5, tp, fp > "eval_vs_truth.tsv"
 }
 
 # read truth VCF sites with matching start VCF sites
@@ -114,23 +136,26 @@ ARGIND == 2 && $2 != "." {
 ARGIND == 3 {
 	fn1 = 0
 	fn2 = 0
-	if ($5 != ".")
-		split($5, vids, /,/)
+	if ($6 != ".")
+		split($6, vids, /,/)
 
-	for (i = 6; i <= NF; ++i) {
+	for (i = 7; i <= NF; ++i) {
 		# check if the truth genotype is in the start VCF first because
 		# the eval VCF is a subset of the start VCF so it cannot be in
-		# the latter, but not the former
-		if (!($4 in Truth_in_start) || !has_match($i, Truth_in_start[$4], Start_gts)) {
+		# the eval VCF, but not in the start VCF
+		if (!($5 in Truth_in_start) || !has_match($i, Truth_in_start[$5], Start_gts)) {
 			++fn2
+			print $1, $2, $3, $4, $5, $i > "false_negatives-type2.tsv"
 			continue
 		}
 
-		if ($5 == "." || !has_match($i, vids, Eval_gts))
+		if ($6 == "." || !has_match($i, vids, Eval_gts)) {
+			print $1, $2, $3, $4, $5, $i > "false_negatives-type1.tsv"
 			++fn1
+		}
 	}
 
-	print $1, $2, $3, $4, fn1, fn2 > "truth_vs_eval.tsv"
+	print $1, $2, $3, $4, $5, fn1, fn2 > "truth_vs_eval.tsv"
 }
 
 function read_gts(file, arr, vid_col, sid_col,    line, n, vid, fields, i) {

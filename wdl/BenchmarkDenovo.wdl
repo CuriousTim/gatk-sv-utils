@@ -81,10 +81,10 @@ workflow BenchmarkDenovo {
       input:
         eval_vcf = MakeDenovoVcf.denovo_vcf,
         eval_vcf_index = MakeDenovoVcf.denovo_vcf_index,
-        truth_vcf = subset_truth.subset_vcf,
-        truth_vcf_index = subset_truth.subset_vcf_index,
-        start_vcf = subset_start.subset_vcf,
-        start_vcf_index = subset_start.subset_vcf_index,
+        truth_vcf = subset_truth.for_concordance_vcf,
+        truth_vcf_index = subset_truth.for_concordance_vcf_index,
+        start_vcf = subset_start.for_concordance_vcf,
+        start_vcf_index = subset_start.for_concordance_vcf_index,
         reference_dict = reference_dict,
         small_cnv_reciprocal_ovp = small_cnv_reciprocal_ovp,
         small_cnv_size_sim = small_cnv_size_sim,
@@ -106,7 +106,7 @@ workflow BenchmarkDenovo {
         eval_in_truth_vcf = SVConcordance.eval_in_truth_vcf,
         truth_in_eval_vcf = SVConcordance.truth_in_eval_vcf,
         truth_in_start_vcf =  SVConcordance.truth_in_start_vcf,
-        start_vcf = subset_start.subset_vcf,
+        start_vcf = subset_start.for_concordance_vcf,
         base_docker = base_docker
     }
   }
@@ -124,6 +124,11 @@ workflow BenchmarkDenovo {
 
   output {
     File benchmark_plots = MakePlots.benchmark_plots
+    Array[File] false_positives = CountConcordance.false_positives
+    Array[File] false_negatives_type1 = CountConcordance.false_negatives_type1
+    Array[File] false_negatives_type2 = CountConcordance.false_negatives_type2
+    Array[File] subset_vcfs = subset_truth.subset_vcf
+    Array[File] subset_vcf_indicies = subset_truth.subset_vcf_index
   }
 }
 
@@ -196,6 +201,7 @@ task SubsetVcf {
   }
 
   String subset_vcf_name = "subset-${basename(vcf)}"
+  String for_concordance_vcf_name = "safe-${basename(vcf)}"
 
   command <<<
     set -o errexit
@@ -207,13 +213,18 @@ task SubsetVcf {
     contig='~{contig}'
     primary_contigs_fai='~{primary_contigs_fai}'
     subset_vcf_name='~{subset_vcf_name}'
+    for_concordance_vcf_name='~{for_concordance_vcf_name}'
 
     # CPX, CTX, CNV, and BND are excluded from benchmarking
     # INFO/ALGORITHMS field is set to pesr for all sites so sites will not be
     # matched according to algorithm, but SVConcordance will accept the VCF
     bcftools view --samples-file "${sample_ids}" --regions "${contig}" \
-      --exclude 'INFO/SVTYPE == "CPX" || INFO/SVTYPE == "CTX" || INFO/SVTYPE == "CNV" || INFO/SVTYPE == "BND"' \
-      "${vcf}" \
+      --exclude 'INFO/SVTYPE == "BND"' --output "${subset_vcf_name}" \
+      --output-type z "${vcf}"
+    bcftools index --tbi "${subset_vcf_name}"
+    bcftools view
+      --exclude 'INFO/SVTYPE == "CPX" || INFO/SVTYPE == "CTX" || INFO/SVTYPE == "CNV"' \
+      "${subset_vcf_name}" \
       | gawk -f /opt/gatk-sv-utils/scripts/set_vcf_algorithms.awk - \
       | bgzip -c > temp.vcf.gz
 
@@ -224,13 +235,15 @@ task SubsetVcf {
       "${primary_contigs_fai}" >> newheader
     cat samples >> newheader
 
-    bcftools reheader --header newheader --output "${subset_vcf_name}" temp.vcf.gz
-    bcftools index --tbi "${subset_vcf_name}"
+    bcftools reheader --header newheader --output "${for_concordance_vcf_name}" temp.vcf.gz
+    bcftools index --tbi "${for_concordance_vcf_name}"
   >>>
 
   output {
     File subset_vcf = subset_vcf_name
     File subset_vcf_index = "${subset_vcf_name}.tbi"
+    File for_concordance_vcf = for_concordance_vcf_name
+    File for_concordance_vcf_index = "${for_concordance_vcf_name}.tbi"
   }
 }
 
@@ -421,10 +434,10 @@ task CountConcordance {
     start_vcf='~{start_vcf}'
 
     bcftools query --include 'GT="alt"' \
-      --format '%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/TRUTH_VID[\t%SAMPLE]\n' \
+      --format '%CHROM\t%POS\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID[\t%SAMPLE]\n' \
       "${eval_in_truth_vcf}" > 'eval.tsv'
     bcftools query --include 'GT="alt"' \
-      --format '%CHROM\t%POS\t%INFO/END\t%ID\t%INFO/TRUTH_VID[\t%SAMPLE]\n' \
+      --format '%CHROM\t%POS\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID[\t%SAMPLE]\n' \
       "${truth_in_eval_vcf}" > 'truth.tsv'
     bcftools query --include 'INFO/TRUTH_VID != "."' \
       --format '%ID\t%TRUTH_VID\n' \
@@ -437,11 +450,18 @@ task CountConcordance {
 
     gawk -f /opt/gatk-sv-utils/scripts/benchmark_denovo.awk \
       'eval.tsv' 'truth_in_start.tsv' 'truth.tsv' 'start.tsv'
+
+    gzip false_positives.tsv
+    gzip false_negatives-type1.tsv
+    gzip false_negatives-type2.tsv
   >>>
 
   output {
     File eval_in_truth_counts = "eval_vs_truth.tsv"
     File truth_in_eval_counts = "truth_vs_eval.tsv"
+    File false_positives = "false_positives.tsv.gz"
+    File false_negatives_type1 = "false_negatives-type1.tsv.gz"
+    File false_negatives_type2 = "false_negatives-type2.tsv.gz"
   }
 }
 

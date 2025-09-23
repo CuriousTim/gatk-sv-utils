@@ -5,6 +5,7 @@ RUN apt-get update \
     libcurl4-openssl-dev \
     libbz2-dev \
     liblzma-dev \
+    libssl-dev \
     zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 

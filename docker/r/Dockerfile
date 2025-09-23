@@ -6,6 +6,7 @@ RUN apt-get update \
     libbz2-dev \
     liblzma-dev \
     libssl-dev \
+    libxml2-dev \
     zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 

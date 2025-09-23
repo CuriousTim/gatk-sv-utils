@@ -10,14 +10,17 @@ nproc <- function() {
 NCPUS <- nproc()
 
 install <- function(x) {
-    remotes::install_version(
-        x[[1]],
-        version = x[[2]],
-        upgrade = "always",
-        repos = c("https://cloud.r-project.org", "https://bioconductor.org/packages/3.21/bioc"),
-        INSTALL_opts = c("--no-docs", "--no-html", "--no-data", "--no-help",
-                         "--no-demo", "--without-keep.source"),
-        Ncpus = NCPUS
+    withCallingHandlers(
+        remotes::install_version(
+            x[[1]],
+            version = x[[2]],
+            upgrade = "always",
+            repos = c("https://cloud.r-project.org", "https://bioconductor.org/packages/3.21/bioc"),
+            INSTALL_opts = c("--no-docs", "--no-html", "--no-data", "--no-help",
+                             "--no-demo", "--without-keep.source"),
+            Ncpus = NCPUS
+        ),
+        warning = function(w) stop(w)
     )
 }
 

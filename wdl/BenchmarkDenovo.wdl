@@ -72,7 +72,7 @@ workflow BenchmarkDenovo {
 
     call MakeDenovoVcf {
       input:
-        subset_start_vcf = subset_start.subset_vcf,
+        subset_start_vcf = subset_start.for_concordance_vcf,
         denovos = denovos,
         base_docker = base_docker
     }

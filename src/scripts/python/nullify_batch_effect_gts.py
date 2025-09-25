@@ -54,9 +54,10 @@ def main():
                 bids = vid_map[rec.id]
                 for bid in bids:
                     for sid in batch_map[bid]:
-                        rec.samples[sid]["GT"] = (
-                            (None,) if rec.info["SVTYPE"] == "CNV" else (None, None)
-                        )
+                        if rec.info["SVTYPE"] == "CNV":
+                            rec.samples[sid]["CN"] = None
+                        else:
+                            rec.samples[sid]["GT"] = (None, None)
             outvcf.write(rec)
     finally:
         invcf.close()

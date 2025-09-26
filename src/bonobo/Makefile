@@ -26,18 +26,24 @@ all: release
 set_denovo_gt: set_denovo_gt.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< -lhts $(LDLIBS) -o $@
 
+.PHONY: add_vcf_filters
+add_vcf_filters: add_vcf_filters.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $< -lhts $(LDLIBS) -o $@
+
 .PHONY: release
 release: CFLAGS := -O2 $(CFLAGS)
-release: set_denovo_gt
+release: set_denovo_gt add_vcf_filters
 
 .PHONY: debug
 debug: CFLAGS := -g $(CFLAGS)
-debug: set_denovo_gt
+debug: set_denovo_gt add_vcf_filters
 
 .PHONY: install
-install: set_denovo_gt
-	$(INSTALL_PROGRAM) $< $(DESTDIR)$(bindir)/$<
+install:
+	$(INSTALL_PROGRAM) set_denovo_gt $(DESTDIR)$(bindir)/set_denovo_gt
+	$(INSTALL_PROGRAM) add_vcf_filters $(DESTDIR)$(bindir)/add_vcf_filters
 
 .PHONY: uninstall
-uninstall: $(DESTDIR)$(bindir)/set_denovo_gt
-	rm -f $(DESTDIR)$(bindir)/$<
+uninstall:
+	rm -f $(DESTDIR)$(bindir)/set_denovo_gt
+	rm -f $(DESTDIR)$(bindir)/add_vcf_filters

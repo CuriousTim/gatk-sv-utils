@@ -128,3 +128,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: AddVcfFilters
+    subclass: WDL
+    primaryDescriptorPath: /wdl/AddVcfFilters.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

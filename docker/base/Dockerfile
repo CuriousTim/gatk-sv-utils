@@ -89,6 +89,7 @@ COPY src/pongo /usr/local/share/awk/pongo
 
 RUN --mount=type=bind,source=src/bonobo,target=/tmp/bonobo,rw \
   cd /tmp/bonobo \
-  make all && make install
+  && make all \
+  && make install
 
 CMD ["bash"]

@@ -6,7 +6,7 @@ workflow AddVcfFilters {
     Array[File] vcfs
     File new_filters
     File? new_headers
-    String base_docker
+    String python_docker
   }
 
   scatter (vcf in vcfs) {
@@ -15,7 +15,7 @@ workflow AddVcfFilters {
         vcf = vcf,
         new_filters = new_filters,
         new_headers = new_headers,
-        base_docker = base_docker
+        python_docker = python_docker
     }
   }
 
@@ -30,7 +30,7 @@ task AddFilters {
     File vcf
     File new_filters
     File? new_headers
-    String base_docker
+    String python_docker
   }
 
   Float disk_size = size(vcf, "GB") * 2 + 16
@@ -39,7 +39,7 @@ task AddFilters {
     bootDiskSizeGb: 8
     cpus: 1
     disks: "local-disk ${ceil(disk_size)}  HDD"
-    docker: base_docker
+    docker: python_docker
     maxRetries: 1
     memory: "4 GiB"
     preemptible: 3
@@ -59,12 +59,12 @@ task AddFilters {
     output_vcf='~{modified_vcf}'
 
     if [[ -n "${new_headers}" ]]; then
-      add_vcf_filters "${vcf}" "${output_vcf}" "${new_filters}" "${new_headers}"
+      python /opt/gatk-sv-utils/scripts/add_vcf_filters.py \
+        "${vcf}" "${output_vcf}" "${new_filters}" "${new_headers}"
     else
-      add_vcf_filters "${vcf}" "${output_vcf}" "${new_filters}"
+      python /opt/gatk-sv-utils/scripts/add_vcf_filters.py \
+        "${vcf}" "${output_vcf}" "${new_filters}"
     fi
-
-    bcftools index --tbi "${output_vcf}"
   >>>
 
   output {

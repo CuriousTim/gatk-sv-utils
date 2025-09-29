@@ -56,7 +56,7 @@ task AddFilters {
     vcf='~{vcf}'
     new_filters='~{new_filters}'
     new_headers='~{if defined(new_headers) then new_headers else ""}'
-    output_vcf='~{modified_vcf}'
+    output_vcf='~{output_vcf}'
 
     if [[ -n "${new_headers}" ]]; then
       python /opt/gatk-sv-utils/scripts/add_vcf_filters.py \

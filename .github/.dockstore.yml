@@ -136,3 +136,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: AddVcfInfos
+    subclass: WDL
+    primaryDescriptorPath: /wdl/AddVcfInfos.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

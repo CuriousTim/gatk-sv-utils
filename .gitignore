@@ -2,3 +2,5 @@
 compile_commands.json
 .cache/
 *.dSYM/
+*.Rcheck/
+*.tar.gz

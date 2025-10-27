@@ -226,7 +226,7 @@ for (i in seq_len(nrow(gd_regions))) {
         plot_name <- sprintf("%s_%d-%d_%s_%s_%s.jpg",
                              chr, gdstart, gdend, gdid, svtype, carrier_id)
         plot_path <- file.path(outdir, plot_name)
-        jpeg(plot_path, res = 300, width = 2880, height = 1620)
+        jpeg(plot_path, res = 100, width = 960, height = 540)
         par(mar = c(3.1, 4.1, 4.1, 2.1))
         plot(NULL, main = main, xlim = range(mids), ylim = c(0, 3), ylab = "Normalized Read Depth Ratio", xlab = "", xaxs = "i", xaxt = "n")
         mids_to_plot <- mids[bins_to_plot]

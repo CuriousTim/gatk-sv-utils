@@ -105,7 +105,7 @@ task VisualizeGenomicDisorders {
 
     awk '$1 == bid {print $2}' bid="${batch_id}" "${sample_table}" > samples.list
 
-    Rscript /opt/gatk-sv-utils/script/visualize_gd.R \
+    Rscript /opt/gatk-sv-utils/scripts/visualize_gd.R \
       "${gd_regions}" \
       "${segdups}" \
       "${bincov}" \

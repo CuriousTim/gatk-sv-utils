@@ -115,13 +115,7 @@ task VisualizeGenomicDisorders {
       "${padding}" \
       plots
 
-    find "${batch_id}" -type f -name '*.jpg' \
-      | awk -F'/' '{print $2}' > manifest
-    if [[ -s manifest ]]; then
-      tar --file "${batch_id}.tar" --files-from=manifest --directory=plots
-    else
-      touch "${batch_id}.tar"
-    fi
+    tar -cf "${batch_id}.tar" plots
   >>>
 }
 
@@ -162,8 +156,14 @@ task MergePlotTars {
     plot_tars='~{write_lines(plot_tars)}'
     tar_prefix='~{tar_prefix}'
 
+    mkdir temp
     while read -r f; do
-      tar --concatenate --file "${tar_prefix}.tar" "${f}"
+      tar -xf "${f}"
+      find plots -type f -name '*.jpg' -exec mv '{}' temp \;
+      rm -r plots
     done < "${plot_tars}"
+
+    mv temp "${tar_prefix}"
+    tar -cf "${tar_prefix}.tar" "${tar_prefix}"
   >>>
 }

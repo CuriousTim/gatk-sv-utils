@@ -97,11 +97,11 @@ task VisualizeGenomicDisorders {
     batch_id='~{batch_id}'
     sample_table='~{sample_table}'
     bincov='~{bincov}'
-    medians_file='{medians_file}'
-    gd_regions='{gd_regions}'
-    segdups='{segdups}'
-    min_rd_deviation='{min_rd_deviation}'
-    padding='{padding}'
+    medians_file='~{medians_file}'
+    gd_regions='~{gd_regions}'
+    segdups='~{segdups}'
+    min_rd_deviation='~{min_rd_deviation}'
+    padding='~{padding}'
 
     awk '$1 == bid {print $2}' bid="${batch_id}" "${sample_table}" > samples.list
 

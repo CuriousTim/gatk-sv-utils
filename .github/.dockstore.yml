@@ -144,3 +144,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: ReviewGenomicDisorders
+    subclass: WDL
+    primaryDescriptorPath: /wdl/ReviewGenomicDisorders.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

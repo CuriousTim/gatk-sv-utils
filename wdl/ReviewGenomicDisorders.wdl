@@ -89,7 +89,7 @@ task VisualizeGenomicDisorders {
     disks: "local-disk ${disk_size} SSD"
     docker: r_docker
     maxRetries: 1
-    memory: "4 GiB"
+    memory: "16 GiB"
     preemptible: 3
   }
 

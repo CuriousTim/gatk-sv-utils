@@ -7,6 +7,7 @@ workflow ReviewGenomicDisorders {
     File gd_regions
     Float padding = 0.5
     Float min_rd_deviation = 0.3
+    Float min_shift_prop = 0.3
     File sample_table
     File segdups
     Array[String] sample_set_ids
@@ -34,6 +35,7 @@ workflow ReviewGenomicDisorders {
         segdups = segdups,
         min_rd_deviation = min_rd_deviation,
         padding = padding,
+        min_shift_prop = min_shift_prop,
         r_docker = r_docker
     }
   }
@@ -57,6 +59,7 @@ task VisualizeGenomicDisorders {
     File segdups
     Float min_rd_deviation
     Float padding
+    Float min_shift_prop
     String r_docker
   }
 
@@ -70,6 +73,7 @@ task VisualizeGenomicDisorders {
     segdups: "Segmental duplication coordinates file."
     min_rd_deviation: "Minimum read depth ratio deviation from 1 required to make a plot."
     padding: "Fraction of GD region to add as padding."
+    min_shift_prop: "Minimum proportion of coverage bins that must be deviated from 1."
     r_docker: "Docker image."
   }
 
@@ -102,6 +106,7 @@ task VisualizeGenomicDisorders {
     segdups='~{segdups}'
     min_rd_deviation='~{min_rd_deviation}'
     padding='~{padding}'
+    min_shift_prop='~{min_shift_prop}'
 
     awk '$1 == bid {print $2}' bid="${batch_id}" "${sample_table}" > samples.list
 
@@ -113,6 +118,7 @@ task VisualizeGenomicDisorders {
       samples.list \
       "${min_rd_deviation}" \
       "${padding}" \
+      "${min_shift_prop}" \
       plots
 
     tar -cf "${batch_id}.tar" plots

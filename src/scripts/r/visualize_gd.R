@@ -1,3 +1,24 @@
+# Visualize Genomic Disorder Regions
+#
+# Usage:
+# Rscript visualize_gd.R [options] <gd_regions> <sd_regions> <bincov> <medians> \
+#   <samples> <outdir>
+# gd_regions      genomic disorder regions to visualize
+# sd_regions      segmental duplications
+# bincov          binned coverage matrix
+# medians         coverage medians
+# samples         list of samples to check for CNVs
+# outdir          output directory
+#
+# options
+# --min-shift         minimum amount a sample's read depth ratio must shifted from 1 to
+#                     considered a CNV carrier
+# --pad               fraction by which the genomic disorder region should be expanded
+#                     for plotting
+# --min-shifted-bins  number of consecutive bins that must have a mean read depth
+#                     shifted from 1, overriding the default of mean over the
+#                     entire region
+
 TABIX_MAX_SEQLEN <- 536870912L
 ROLLING_MEAN_WINDOW <- 21
 MAX_BACKGROUND <- 200L
@@ -53,33 +74,6 @@ query_bincov <- function(con, header, contig, start, end) {
     tmp[, start := start + 1L]
 }
 
-normalize_bincov <- function(x, medians) {
-    samples <- colnames(x)
-    if (!all(samples %in% names(medians))) {
-        stop("all samples in the bincov matrix must have a median coverage")
-    }
-
-    medians <- medians[samples]
-    assay(x, 1) <- sweep(assay(x, 1), 2, medians, "/", check.margin = FALSE)
-
-    x
-}
-
-rollmean <- function(x) {
-    binwidth <- x[, end - start + 1]
-    if (length(unique(binwidth)) != 1) {
-        stop("bin widths must be identical")
-    }
-    binwidth <- binwidth[[1]]
-    window <- floor(ROLLING_MEAN_WINDOW / 2)
-    bins <- x[["start"]] - x[1, start] / binwidth
-
-    assay(x, 1) <- as.data.table(lapply(assay(x, 1),
-                                        \(x) slider::slide_index_mean(x, bins, before = window, after = window)))
-
-    x
-}
-
 spaced_intervals <- function(n) {
     nintervals <- ceiling(n * BIN_PLOT_FRACTION)
     if (nintervals < 2) {
@@ -114,44 +108,100 @@ get_sd_overlaps <- function(sds, chr, start, end) {
     sds[subjectHits(ovp)]
 }
 
-# Main ------------------------------------------------------------------------
+predict_carriers <- function(bc, bcidx, window, svtype, min_shift) {
+    if (nrow(bc) < 2) {
+        return(NA_character_)
+    }
+    if (svtype == "DUP") {
+        op <- function(x) { x >= 1 + min_shift }
+    } else {
+        op <- function(x) { x <= 1 - min_shift }
+    }
+    if (!is.null(window)) {
+        if (nrow(bc) < window) {
+            return(NA_character_)
+        }
+        hw <- floor(window / 2)
+        roll <- lapply(bc, \(x) slide_index_mean(x, bcidx, before = hw, after = hw, complete = TRUE))
+        pass <- vapply(roll, \(x) any(op(x), na.rm = TRUE), logical(1))
+        pass <- pass[pass == TRUE]
+    } else {
+        m <- vapply(bc, mean, double(1))
+        pass <- m[op(m)]
+    }
 
-# Usage:
-# Rscript visualize_gd.R <gd_regions> <sd_regions> <bincov> <medians> \
-#   <samples> <min_shift> <pad> <min_shift_prop> <outdir>
-# gd_regions      genomic disorder regions
-# sd_regions      segemental duplications
-# bincov          binned coverage matrix
-# medians         coverage medians
-# samples         list of samples to check for CNVs
-# min_shift       minimum amount a sample's read depth ratio must shifted from 1 to
-#                 considered a CNV carrier
-# pad             fraction by which the genomic disorder region should be expanded
-#                 for plotting
-# min_shift_prop  proportion of bins that must be shifted to be CNV
-# outdir          output directory
+    names(pass)
+}
+
+parse_args <- function() {
+    args <- commandArgs(trailingOnly = TRUE)
+    pos_args <- vector("list", 6)
+    opts <- list(min_shift = 0.3, pad = 0.5, min_shifted_bins = NULL)
+    i <- 1
+    j <- 1
+    repeat {
+        if (i > length(args)) {
+            break
+        }
+
+        if (args[[i]] == "--min-shift") {
+            i <- i + 1
+            opts$min_shift <- as.double(args[[i]])
+        } else if (args[[i]] == "--pad") {
+            i <- i + 1
+            opts$pad <- as.double(args[[i]])
+        } else if (args[[i]] == "--min-shifted-bins") {
+            i <- i + 1
+            opts$min_shifted_bins <- as.integer(args[[i]])
+        } else {
+            pos_args[[j]] <- args[[i]]
+            j <- j + 1
+        }
+
+        i <- i + 1
+    }
+
+    if (any(sapply(pos_args, is.null))) {
+        stop("incorrect number of arguments")
+    }
+
+    append(pos_args, opts)
+}
+
+# Main ------------------------------------------------------------------------
 
 suppressPackageStartupMessages(library(data.table))
 suppressPackageStartupMessages(library(GenomicRanges))
 suppressPackageStartupMessages(library(Rsamtools))
 suppressPackageStartupMessages(library(slider))
 
-argv <- commandArgs(trailingOnly = TRUE)
+argv <- parse_args()
 
 gd_regions <- fread(argv[[1]], header = TRUE, sep = "\t")
 sd_regions <- read_sd(argv[[2]])
 bincov_con <- TabixFile(argv[[3]])
 cov_medians <- read_medians_file(argv[[4]])
 samples <- readLines(argv[[5]])
-min_shift <- as.double(argv[[6]])
-pad <- as.double(argv[[7]])
-min_shift_prop <- as.double(argv[[8]])
-outdir <- argv[[9]]
+outdir <- argv[[6]]
+min_shift <- argv[["min_shift"]]
+pad <- argv[["pad"]]
+min_shifted_bins <- argv[["min_shifted_bins"]]
+
 dir.create(outdir)
 
-if (pad < 0) {
+if (!is.finite(pad) || pad < 0) {
     stop("padding must be a non-negative number")
 }
+if (!is.finite(min_shift) || min_shift < 0) {
+    stop("min shift must be a non-negative number")
+}
+if (!is.null(min_shifted_bins) && (!is.finite(min_shifted_bins) || min_shifted_bins < 2 || min_shifted_bins %% 2 == 0)) {
+    stop("min shifted bins must be an odd integer greater than 2")
+}
+if (length(samples) == 0) {
+    stop("at least one sample must be given")
+}
+
 header <- read_bincov_header(bincov_con)
 if (!all(samples %in% header)) {
     stop("all requested samples must be in the bincov matrix")
@@ -159,10 +209,6 @@ if (!all(samples %in% header)) {
 
 if (!all(samples %in% names(cov_medians))) {
     stop("all requested samples must be in the median coverage file")
-}
-
-if (is.na(min_shift_prop) || min_shift_prop < 0 || min_shift_prop > 1) {
-	stop("min shift proportion must be between 0 and 1")
 }
 
 pad_size <- gd_regions[, ceiling((end_GRCh38 - start_GRCh38 + 1L) * ..pad)]
@@ -180,50 +226,45 @@ for (i in seq_len(nrow(gd_regions))) {
         stop("SV type must be 'DUP' or 'DEL'")
     }
     bc <- query_bincov(bincov_con, header, chr, qstart, qend)
-    if (is.null(bc) || nrow(bc) < 2) {
-        message("giving up due to insufficient number of bincov intervals")
+    if (is.null(bc)) {
+        message("no coverage intervals overlap query region")
         next
     }
 
     bc_coords <- GRanges(bc[["chr"]], IRanges(bc[["start"]], bc[["end"]]))
     bc[, c("chr", "start", "end") := list(NULL)]
     bc <- bc[, ..samples]
+    gdidx <- subjectHits(findOverlaps(GRanges(chr, IRanges(gdstart, gdend)), bc_coords))
+    binwidth <- width(bc_coords)
+    if (length(unique(binwidth)) != 1) {
+        stop("bincov interval widths must be identical")
+    }
 
     # normalize
     norms <- bc[, mapply(`/`, .SD, ..cov_medians[names(.SD)], SIMPLIFY = FALSE)]
+    binwidth <- binwidth[[1]]
+    binidx <- (start(bc_coords) - start(bc_coords[1])) / binwidth
 
-    gdbinidx <- subjectHits(findOverlaps(GRanges(chr, IRanges(gdstart, gdend)), bc_coords))
-    gdbins <- norms[gdbinidx, ]
-
-    # potential carriers
-    if (svtype == "DUP")
-        shifted_bins <- vapply(gdbins, \(x) sum(x >= 1 + min_shift), double(1))
-    else {
-        shifted_bins <- vapply(gdbins, \(x) sum(x <= 1 - min_shift), double(1))
-    }
-    carriers <- shifted_bins[shifted_bins / length(gdbinidx) >= min_shift_prop]
+    carriers <- predict_carriers(norms[gdidx, ], binidx[gdidx], min_shifted_bins, svtype, min_shift)
 
     if (length(carriers) == 0) {
         message("no potential CNV carriers")
+        next
+    } else if (length(carriers) == 1 && is.na(carriers)) {
+        message("insufficient number of bins overlapping region")
         next
     }
 
     if (length(samples) - length(carriers) < MAX_BACKGROUND) {
         bg_samples <- samples
     } else {
-        bg_samples <- setdiff(samples, names(carriers))
+        bg_samples <- setdiff(samples, carriers)
     }
     bg_samples_to_plot <- sample(bg_samples, min(length(bg_samples), MAX_BACKGROUND))
 
     if (length(bc_coords) > ROLLING_MEAN_WINDOW) {
-        binwidth <- width(bc_coords)
-        if (length(unique(binwidth)) != 1) {
-            stop("bincov interval widths must be identical")
-        }
-        binwidth <- binwidth[[1]]
         window <- floor(ROLLING_MEAN_WINDOW / 2)
-        bins <- (start(bc_coords) - start(bc_coords[1])) / binwidth
-        norms[, names(.SD) := lapply(.SD, \(x) slide_index_mean(x, ..bins, before = ..window, after = ..window))]
+        norms[, names(.SD) := lapply(.SD, \(x) slide_index_mean(x, ..binidx, before = ..window, after = ..window))]
     }
 
     mids <- start(bc_coords) + floor(width(bc_coords) / 2)
@@ -231,7 +272,7 @@ for (i in seq_len(nrow(gd_regions))) {
     size_pretty <- format_size(gdend - gdstart + 1)
     sd_overlaps <- get_sd_overlaps(sd_regions, chr, qstart, qend)
     for (j in seq_along(carriers)) {
-        carrier_id <- names(carriers)[[j]]
+        carrier_id <- carriers[[j]]
         cnv_col <- if (svtype == "DEL") "red" else "blue"
         if (nchar(carrier_id) > 30) {
             carrier_pretty <- paste0(substr(carrier_id, 1, 30), "...")

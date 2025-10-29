@@ -5,9 +5,9 @@ workflow ReviewGenomicDisorders {
   input {
     String tar_prefix
     File gd_regions
-    Float padding = 0.5
-    Float min_rd_deviation = 0.3
-    Float min_shift_prop = 0.3
+    Float? padding
+    Float? min_rd_deviation
+    Float? min_shifted_bins
     File sample_table
     File segdups
     Array[String] sample_set_ids
@@ -35,7 +35,7 @@ workflow ReviewGenomicDisorders {
         segdups = segdups,
         min_rd_deviation = min_rd_deviation,
         padding = padding,
-        min_shift_prop = min_shift_prop,
+        min_shifted_bins = min_shifted_bins,
         r_docker = r_docker
     }
   }
@@ -57,9 +57,9 @@ task VisualizeGenomicDisorders {
     File medians_file
     File gd_regions
     File segdups
-    Float min_rd_deviation
-    Float padding
-    Float min_shift_prop
+    Float? min_rd_deviation
+    Float? padding
+    Float? min_shifted_bins
     String r_docker
   }
 
@@ -73,7 +73,7 @@ task VisualizeGenomicDisorders {
     segdups: "Segmental duplication coordinates file."
     min_rd_deviation: "Minimum read depth ratio deviation from 1 required to make a plot."
     padding: "Fraction of GD region to add as padding."
-    min_shift_prop: "Minimum proportion of coverage bins that must be deviated from 1."
+    min_shifted_bins: "Minimum number of consecutive bins that must have mean deviation."
     r_docker: "Docker image."
   }
 
@@ -104,21 +104,21 @@ task VisualizeGenomicDisorders {
     medians_file='~{medians_file}'
     gd_regions='~{gd_regions}'
     segdups='~{segdups}'
-    min_rd_deviation='~{min_rd_deviation}'
-    padding='~{padding}'
-    min_shift_prop='~{min_shift_prop}'
+    min_rd_deviation='~{if defined(min_rd_deviation) then "--min-shift ${min_rd_deviation}" else ""}'
+    padding='~{if defined(padding) then "--pad ${padding}" else ""}'
+    min_shifted_bins='~{if defined(min_shifted_bins) then "--min-shifted-bins ${min_shifted_bins}" else ""}'
 
     awk '$1 == bid {print $2}' bid="${batch_id}" "${sample_table}" > samples.list
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_gd.R \
+      ${min_rd_deviation} \
+      ${padding} \
+      ${min_shifted_bins} \
       "${gd_regions}" \
       "${segdups}" \
       "${bincov}" \
       "${medians_file}" \
       samples.list \
-      "${min_rd_deviation}" \
-      "${padding}" \
-      "${min_shift_prop}" \
       plots
 
     tar -cf "${batch_id}.tar" plots

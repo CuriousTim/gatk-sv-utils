@@ -10,6 +10,7 @@ workflow ReviewGenomicDisorders {
     Float? min_shifted_bins
     File sample_table
     File segdups
+    File pedigree
     Array[String] sample_set_ids
     Array[File] bincov_matrices
     Array[File] bincov_matrix_indices
@@ -33,6 +34,7 @@ workflow ReviewGenomicDisorders {
         gd_regions = gd_regions,
         sample_table = sample_table,
         segdups = segdups,
+        pedigree = pedigree,
         min_rd_deviation = min_rd_deviation,
         padding = padding,
         min_shifted_bins = min_shifted_bins,
@@ -56,6 +58,7 @@ task VisualizeGenomicDisorders {
     File bincov_index
     File medians_file
     File gd_regions
+    File pedigree
     File segdups
     Float? min_rd_deviation
     Float? padding
@@ -70,6 +73,7 @@ task VisualizeGenomicDisorders {
     bincov_index: "Binned coverage matrix index file."
     medians_file: "Genome-wide median coverage file."
     gd_regions: "Genomic disorder regions coordinates file."
+    pedigree: "Pedigree."
     segdups: "Segmental duplication coordinates file."
     min_rd_deviation: "Minimum read depth ratio deviation from 1 required to make a plot."
     padding: "Fraction of GD region to add as padding."
@@ -81,7 +85,7 @@ task VisualizeGenomicDisorders {
     File plots = "${batch_id}.tar"
   }
 
-  Float input_size = size([bincov, medians_file, gd_regions, segdups], "GB")
+  Float input_size = size([bincov, medians_file, gd_regions, segdups, pedigree], "GB")
   Int disk_size = ceil(input_size) + 50
   runtime {
     bootDiskSizeGb: 8
@@ -103,12 +107,14 @@ task VisualizeGenomicDisorders {
     bincov='~{bincov}'
     medians_file='~{medians_file}'
     gd_regions='~{gd_regions}'
+    pedigree='~{pedigree}'
     segdups='~{segdups}'
     min_rd_deviation='~{if defined(min_rd_deviation) then "--min-shift ${min_rd_deviation}" else ""}'
     padding='~{if defined(padding) then "--pad ${padding}" else ""}'
     min_shifted_bins='~{if defined(min_shifted_bins) then "--min-shifted-bins ${min_shifted_bins}" else ""}'
 
     awk '$1 == bid {print $2}' bid="${batch_id}" "${sample_table}" > samples.list
+    cut -f2,5 "${pedigree}" > ploidy.tsv
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_gd.R \
       ${min_rd_deviation} \
@@ -119,6 +125,7 @@ task VisualizeGenomicDisorders {
       "${bincov}" \
       "${medians_file}" \
       samples.list \
+      ploidy.tsv \
       plots
 
     tar -cf "${batch_id}.tar" plots

@@ -2,12 +2,13 @@
 #
 # Usage:
 # Rscript visualize_gd.R [options] <gd_regions> <sd_regions> <bincov> <medians> \
-#   <samples> <outdir>
+#   <samples> <ploidy> <outdir>
 # gd_regions      genomic disorder regions to visualize
 # sd_regions      segmental duplications
 # bincov          binned coverage matrix
 # medians         coverage medians
 # samples         list of samples to check for CNVs
+# ploidy          ploidy table, 0 for unknown, 1 for male, 2 for female
 # outdir          output directory
 #
 # options
@@ -20,9 +21,9 @@
 #                     entire region
 
 TABIX_MAX_SEQLEN <- 536870912L
-ROLLING_MEAN_WINDOW <- 21
+ROLLING_MEDIAN_WINDOW <- 31
 MAX_BACKGROUND <- 200L
-BIN_PLOT_FRACTION <- 0.1
+BIN_PLOT_FRACTION <- 0.05
 
 read_sd <- function(path) {
   tmp <- fread(path, header = FALSE, select = 1:3, sep = "\t")
@@ -57,6 +58,17 @@ read_medians_file <- function(path) {
     names(medians) <- ids
 
     medians
+}
+
+read_ploidy <- function(path) {
+    tmp <- fread(path, header = FALSE, sep = "\t",
+                 col.names = c("sample_id", "sex"),
+                 colClasses = c("character", "integer"))
+    if (any(!tmp$sex %in% c(0L, 1L, 2L))) {
+        stop("permitted values for sex are 0, 1, and 2")
+    }
+    tmp[sex == 0, sex := NA_integer_]
+    tmp
 }
 
 query_bincov <- function(con, header, contig, start, end) {
@@ -108,25 +120,52 @@ get_sd_overlaps <- function(sds, chr, start, end) {
     sds[subjectHits(ovp)]
 }
 
-predict_carriers <- function(bc, bcidx, window, svtype, min_shift) {
+predict_carriers <- function(bc, chr, ploidy, window, svtype, min_shift) {
     if (nrow(bc) < 2) {
         return(NA_character_)
     }
-    if (svtype == "DUP") {
-        op <- function(x) { x >= 1 + min_shift }
+
+    if (chr == "chrY") {
+        males <- ploidy[sex == 1L, sample_id]
+        if (length(males) == 0) {
+            return(character())
+        }
+        bc <- bc[, ..males]
+        if (svtype == "DUP") {
+            op <- function(x) { x >= 0.5 + min_shift}
+        } else {
+            op <- function(x) { x <= 0.5 - min_shift}
+        }
+    } else if (chr == "chrX") {
+        with_ploidy <- ploidy[!is.na(sex), sample_id]
+        if (length(with_ploidy) == 0) {
+            return(character())
+        }
+        bc <- bc[, colnames(bc) %in% with_ploidy, with = FALSE]
+        expected_rdr <- ploidy[colnames(bc), sex] / 2
+        if (svtype == "DUP") {
+            op <- function(x) { x >= expected_rdr + min_shift }
+        } else {
+            op <- function(x) { x <= expected_rdr - min_shift }
+        }
     } else {
-        op <- function(x) { x <= 1 - min_shift }
+        if (svtype == "DUP") {
+            op <- function(x) { x >= 1 + min_shift }
+        } else {
+            op <- function(x) { x <= 1 - min_shift}
+        }
     }
+
     if (!is.null(window)) {
         if (nrow(bc) < window) {
             return(NA_character_)
         }
-        hw <- floor(window / 2)
-        roll <- lapply(bc, \(x) slide_index_mean(x, bcidx, before = hw, after = hw, complete = TRUE))
+        keep <- seq.int(ceiling(window / 2), nrow(bc) - floor(window / 2))
+        roll <- lapply(bc, \(x) runmed(x, window)[keep])
         pass <- vapply(roll, \(x) any(op(x), na.rm = TRUE), logical(1))
         pass <- pass[pass == TRUE]
     } else {
-        m <- vapply(bc, mean, double(1))
+        m <- vapply(bc, median, double(1))
         pass <- m[op(m)]
     }
 
@@ -135,7 +174,7 @@ predict_carriers <- function(bc, bcidx, window, svtype, min_shift) {
 
 parse_args <- function() {
     args <- commandArgs(trailingOnly = TRUE)
-    pos_args <- vector("list", 6)
+    pos_args <- vector("list", 7)
     opts <- list(min_shift = 0.3, pad = 0.5, min_shifted_bins = NULL)
     i <- 1
     j <- 1
@@ -173,7 +212,6 @@ parse_args <- function() {
 suppressPackageStartupMessages(library(data.table))
 suppressPackageStartupMessages(library(GenomicRanges))
 suppressPackageStartupMessages(library(Rsamtools))
-suppressPackageStartupMessages(library(slider))
 
 argv <- parse_args()
 
@@ -182,7 +220,8 @@ sd_regions <- read_sd(argv[[2]])
 bincov_con <- TabixFile(argv[[3]])
 cov_medians <- read_medians_file(argv[[4]])
 samples <- readLines(argv[[5]])
-outdir <- argv[[6]]
+ploidy <- read_ploidy(argv[[6]])
+outdir <- argv[[7]]
 min_shift <- argv[["min_shift"]]
 pad <- argv[["pad"]]
 min_shifted_bins <- argv[["min_shifted_bins"]]
@@ -211,6 +250,9 @@ if (!all(samples %in% names(cov_medians))) {
     stop("all requested samples must be in the median coverage file")
 }
 
+ploidy <- ploidy[samples, nomatch = NA, on = "sample_id"]
+setkey(ploidy, sample_id)
+
 pad_size <- gd_regions[, ceiling((end_GRCh38 - start_GRCh38 + 1L) * ..pad)]
 expanded_gd <- gd_regions[, list(chr = chr, start = pmax(1L, start_GRCh38 - pad_size), end = pmin(TABIX_MAX_SEQLEN, end_GRCh38 + pad_size))]
 for (i in seq_len(nrow(gd_regions))) {
@@ -235,17 +277,11 @@ for (i in seq_len(nrow(gd_regions))) {
     bc[, c("chr", "start", "end") := list(NULL)]
     bc <- bc[, ..samples]
     gdidx <- subjectHits(findOverlaps(GRanges(chr, IRanges(gdstart, gdend)), bc_coords))
-    binwidth <- width(bc_coords)
-    if (length(unique(binwidth)) != 1) {
-        stop("bincov interval widths must be identical")
-    }
 
     # normalize
     norms <- bc[, mapply(`/`, .SD, ..cov_medians[names(.SD)], SIMPLIFY = FALSE)]
-    binwidth <- binwidth[[1]]
-    binidx <- (start(bc_coords) - start(bc_coords[1])) / binwidth
 
-    carriers <- predict_carriers(norms[gdidx, ], binidx[gdidx], min_shifted_bins, svtype, min_shift)
+    carriers <- predict_carriers(norms[gdidx, ], chr, ploidy, min_shifted_bins, svtype, min_shift)
 
     if (length(carriers) == 0) {
         message("no potential CNV carriers")
@@ -262,9 +298,8 @@ for (i in seq_len(nrow(gd_regions))) {
     }
     bg_samples_to_plot <- sample(bg_samples, min(length(bg_samples), MAX_BACKGROUND))
 
-    if (length(bc_coords) > ROLLING_MEAN_WINDOW) {
-        window <- floor(ROLLING_MEAN_WINDOW / 2)
-        norms[, names(.SD) := lapply(.SD, \(x) slide_index_mean(x, ..binidx, before = ..window, after = ..window))]
+    if (length(bc_coords) > ROLLING_MEDIAN_WINDOW) {
+        norms[, names(.SD) := lapply(.SD, \(x) runmed(x, ROLLING_MEDIAN_WINDOW, na.action = "fail"))]
     }
 
     mids <- start(bc_coords) + floor(width(bc_coords) / 2)

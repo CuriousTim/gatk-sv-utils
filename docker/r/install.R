@@ -15,7 +15,7 @@ install <- function(x) {
             x[[1]],
             version = x[[2]],
             upgrade = "always",
-            repos = c("https://cloud.r-project.org", "https://bioconductor.org/packages/3.21/bioc"),
+            repos = c("https://cloud.r-project.org", "https://bioconductor.org/packages/3.22/bioc"),
             INSTALL_opts = c("--no-docs", "--no-html", "--no-data", "--no-help",
                              "--no-demo", "--without-keep.source"),
             Ncpus = NCPUS
@@ -28,9 +28,9 @@ install <- function(x) {
 cran_pkgs <- c("data.table@1.17.8",
                "R.utils@2.13.0") |>
   parse_pkgs()
-bioc_pkgs <- c("Rsamtools@2.24.1",
-               "GenomicRanges@1.60.0",
-	       "rtracklayer@1.68.0") |>
+bioc_pkgs <- c("Rsamtools@2.27.0",
+               "GenomicRanges@1.62.0",
+	       "rtracklayer@1.70.0") |>
   parse_pkgs()
 
 invisible(lapply(cran_pkgs, install))

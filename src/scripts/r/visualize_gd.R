@@ -24,11 +24,6 @@ TABIX_MAX_SEQLEN <- 536870912L
 ROLLING_MEDIAN_WINDOW <- 31
 MAX_BACKGROUND <- 200L
 BIN_PLOT_FRACTION <- 0.05
-MIN_ZERO_FREQ_PROP <- 0.09
-# Maximum length of chromosome is ~250M so maximum number of bins at 100 bases
-# is 2.5M bins. Therefore, maximum number of bins that will be extracted from
-# the bincov is 2.5M. That is between 2^21 and 2^22.
-POW2 <- 2 ^ (1:21)
 
 read_sd <- function(path) {
   tmp <- fread(path, header = FALSE, select = 1:3, sep = "\t")
@@ -125,19 +120,6 @@ get_sd_overlaps <- function(sds, chr, start, end) {
     sds[subjectHits(ovp)]
 }
 
-is_noisy_coverage <- function(x) {
-    # FFT takes too long for some number of bins so we take a sample of bins
-    # that is the largest power of 2 less than the number of bins.
-    slen <- POW2[[max(which(POW2 <= nrow(x)))]]
-    s <- seq.int(from = floor((nrow(x) - slen) / 2), length.out = slen)
-    tmp <- x[s, ]
-    dft <- mvfft(as.matrix(tmp))
-    ampl <- Mod(dft[seq_len(ceiling(nrow(dft) / 2)), ]) / nrow(dft)
-    ampl[-1, ] <- ampl[-1, ] * 2
-    prop <- ampl[1, ] / colSums(ampl)
-    prop < MIN_ZERO_FREQ_PROP
-}
-
 predict_carriers <- function(bc, chr, ploidy, window, svtype, min_shift) {
     if (nrow(bc) < 2) {
         return(NA_character_)
@@ -184,8 +166,7 @@ predict_carriers <- function(bc, chr, ploidy, window, svtype, min_shift) {
         pass <- pass[pass == TRUE]
     } else {
         m <- vapply(bc, median, double(1))
-        noisy <- is_noisy_coverage(bc)
-        pass <- m[op(m) & !noisy]
+        pass <- m[op(m)]
     }
 
     names(pass)

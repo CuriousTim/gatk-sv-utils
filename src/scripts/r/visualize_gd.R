@@ -276,12 +276,13 @@ for (i in seq_len(nrow(gd_regions))) {
     bc_coords <- GRanges(bc[["chr"]], IRanges(bc[["start"]], bc[["end"]]))
     bc[, c("chr", "start", "end") := list(NULL)]
     bc <- bc[, ..samples]
-    gdidx <- subjectHits(findOverlaps(GRanges(chr, IRanges(gdstart, gdend)), bc_coords))
+    nonsd_idx <- setdiff(seq_along(bc_coords), queryHits(findOverlaps(bc_coords, sd_regions)))
+    gd_idx <- queryHits(findOverlaps(bc_coords, GRanges(chr, IRanges(gdstart, gdend))))
 
     # normalize
     norms <- bc[, mapply(`/`, .SD, ..cov_medians[names(.SD)], SIMPLIFY = FALSE)]
 
-    carriers <- predict_carriers(norms[gdidx, ], chr, ploidy, min_shifted_bins, svtype, min_shift)
+    carriers <- predict_carriers(norms[intersect(nonsd_idx, gd_idx), ], chr, ploidy, min_shifted_bins, svtype, min_shift)
 
     if (length(carriers) == 0) {
         message("no potential CNV carriers")

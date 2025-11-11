@@ -12,13 +12,15 @@
 # outdir          output directory
 #
 # options
-# --min-shift         minimum amount a sample's read depth ratio must shifted from 1 to
-#                     considered a CNV carrier
-# --pad               fraction by which the genomic disorder region should be expanded
-#                     for plotting
-# --min-shifted-bins  number of consecutive bins that must have a mean read depth
-#                     shifted from 1, overriding the default of mean over the
-#                     entire region
+# --min-shift             minimum amount a sample's read depth ratio must shifted from 1 to
+#                         considered a CNV carrier
+# --pad                   fraction by which the genomic disorder region should be expanded
+#                         for plotting
+# --min-shifted-bins      number of consecutive bins that must have a mean read depth
+#                         shifted from 1, overriding the default of mean over the
+#                         entire region
+# --max-calls-per-sample  maximum number of calls per sample
+# --violators             samples that had more than the max number of calls
 
 TABIX_MAX_SEQLEN <- 536870912L
 ROLLING_MEDIAN_WINDOW <- 31
@@ -175,7 +177,7 @@ predict_carriers <- function(bc, chr, ploidy, window, svtype, min_shift) {
 parse_args <- function() {
     args <- commandArgs(trailingOnly = TRUE)
     pos_args <- vector("list", 7)
-    opts <- list(min_shift = 0.3, pad = 0.5, min_shifted_bins = NULL)
+    opts <- list(min_shift = 0.3, pad = 0.5, min_shifted_bins = NULL, max_calls_per_sample = 3, violators = NULL)
     i <- 1
     j <- 1
     repeat {
@@ -192,6 +194,12 @@ parse_args <- function() {
         } else if (args[[i]] == "--min-shifted-bins") {
             i <- i + 1
             opts$min_shifted_bins <- as.integer(args[[i]])
+        } else if (args[[i]] == "--max-calls-per-sample") {
+            i <- i + 1
+            opts$max_calls_per_sample <- as.integer(args[[i]])
+        } else if (args[[i]] == "--violators") {
+            i <- i + 1
+            opts$violators <- args[[i]]
         } else {
             pos_args[[j]] <- args[[i]]
             j <- j + 1
@@ -207,6 +215,30 @@ parse_args <- function() {
     append(pos_args, opts)
 }
 
+add_plot_to_store <- function(h, s, path, cluster) {
+    val <- gethash(h, s)
+    if (is.null(val)) {
+        val <- list(clusters = hashtab(), paths = character(), count = 0L)
+    }
+    val[["paths"]] <- append(val[["paths"]], path)
+
+    if (!is.na(cluster) && is.null(gethash(val[["clusters"]], cluster))) {
+        val[["clusters"]] <- sethash(val[["clusters"]], cluster, NULL)
+        val[["count"]] <- val[["count"]] + 1L
+    }
+
+    if (is.na(cluster)) {
+        val[["count"]] <- val[["count"]] + 1L
+    }
+}
+
+remove_outliers <- function(k, v, max_count, con) {
+    if (v[["count"]] > max_count) {
+        writeLines(sprintf("%s\t%d", k, v[["count"]]), con)
+        file.remove(v[["paths"]])
+    }
+}
+
 # Main ------------------------------------------------------------------------
 
 suppressPackageStartupMessages(library(data.table))
@@ -215,7 +247,7 @@ suppressPackageStartupMessages(library(Rsamtools))
 
 argv <- parse_args()
 
-gd_regions <- fread(argv[[1]], header = TRUE, sep = "\t")
+gd_regions <- fread(argv[[1]], header = TRUE, sep = "\t", strip.white = FALSE, na.strings = "")
 sd_regions <- read_sd(argv[[2]])
 bincov_con <- TabixFile(argv[[3]])
 cov_medians <- read_medians_file(argv[[4]])
@@ -225,6 +257,8 @@ outdir <- argv[[7]]
 min_shift <- argv[["min_shift"]]
 pad <- argv[["pad"]]
 min_shifted_bins <- argv[["min_shifted_bins"]]
+max_calls_per_sample <- argv[["max_calls_per_sample"]]
+violators <- argv[["violators"]]
 
 dir.create(outdir)
 
@@ -253,6 +287,8 @@ if (!all(samples %in% names(cov_medians))) {
 ploidy <- ploidy[samples, nomatch = NA, on = "sample_id"]
 setkey(ploidy, sample_id)
 
+plots_store <- hashtab()
+
 pad_size <- gd_regions[, ceiling((end_GRCh38 - start_GRCh38 + 1L) * ..pad)]
 expanded_gd <- gd_regions[, list(chr = chr, start = pmax(1L, start_GRCh38 - pad_size), end = pmin(TABIX_MAX_SEQLEN, end_GRCh38 + pad_size))]
 for (i in seq_len(nrow(gd_regions))) {
@@ -261,6 +297,7 @@ for (i in seq_len(nrow(gd_regions))) {
     gdend <- gd_regions[i, end_GRCh38]
     gdid <- gd_regions[i, GD_ID]
     svtype <- gd_regions[i, svtype]
+    cluster <- gd_regions[i, cluster]
     qstart <- expanded_gd[i, start]
     qend <- expanded_gd[i, end]
     message(sprintf("checking for genomic disorder at %s:%d-%d (%s)", chr, gdstart, gdend, svtype))
@@ -319,6 +356,7 @@ for (i in seq_len(nrow(gd_regions))) {
         plot_name <- sprintf("%s_%d-%d_%s_%s_%s.jpg",
                              chr, gdstart, gdend, gdid, svtype, carrier_id)
         plot_path <- file.path(outdir, plot_name)
+        add_plot_to_store(plots_store, carrier_id, plot_path, cluster)
         jpeg(plot_path, res = 100, width = 960, height = 540)
         par(mar = c(3.1, 4.1, 4.1, 2.1))
         plot(NULL, main = main, xlim = range(mids), ylim = c(0, 3), ylab = "Normalized Read Depth Ratio", xlab = "", xaxs = "i", xaxt = "n")
@@ -346,3 +384,6 @@ for (i in seq_len(nrow(gd_regions))) {
         dev.off()
     }
 }
+
+violators_con <- file(if (is.null(violators)) nullfile() else violators)
+maphash(plots_store, \(k, v) remove_outliers(k, v, max_calls_per_sample, violators_con))

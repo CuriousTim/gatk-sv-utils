@@ -8,6 +8,7 @@ workflow ReviewGenomicDisorders {
     Float? padding
     Float? min_rd_deviation
     Float? min_shifted_bins
+    Int? max_calls_per_sample
     File sample_table
     File segdups
     File pedigree
@@ -22,6 +23,7 @@ workflow ReviewGenomicDisorders {
 
   output {
     File gd_plots = MergePlotTars.gd_plots
+    File samples_with_excess_calls = MergePlotTars.excess_call_samples
   }
 
   scatter (i in range(length(bincov_matrices))) {
@@ -38,6 +40,7 @@ workflow ReviewGenomicDisorders {
         min_rd_deviation = min_rd_deviation,
         padding = padding,
         min_shifted_bins = min_shifted_bins,
+        max_calls_per_sample = max_calls_per_sample,
         r_docker = r_docker
     }
   }
@@ -63,6 +66,7 @@ task VisualizeGenomicDisorders {
     Float? min_rd_deviation
     Float? padding
     Float? min_shifted_bins
+    Float? max_calls_per_sample
     String r_docker
   }
 
@@ -78,11 +82,13 @@ task VisualizeGenomicDisorders {
     min_rd_deviation: "Minimum read depth ratio deviation from 1 required to make a plot."
     padding: "Fraction of GD region to add as padding."
     min_shifted_bins: "Minimum number of consecutive bins that must have mean deviation."
+    max_calls_per_sample: "Maximum number of call-regions per sample."
     r_docker: "Docker image."
   }
 
   output {
     File plots = "${batch_id}.tar"
+    File excess_call_samples = "excess_calls_samples_${batch_id}.tsv"
   }
 
   Float input_size = size([bincov, medians_file, gd_regions, segdups, pedigree], "GB")
@@ -112,6 +118,7 @@ task VisualizeGenomicDisorders {
     min_rd_deviation='~{if defined(min_rd_deviation) then "--min-shift ${min_rd_deviation}" else ""}'
     padding='~{if defined(padding) then "--pad ${padding}" else ""}'
     min_shifted_bins='~{if defined(min_shifted_bins) then "--min-shifted-bins ${min_shifted_bins}" else ""}'
+    max_calls_per_sample='~{if defined(max_calls_per_sample) then "--max-calls-per-sample ${max_calls_per_sample}" else ""}'
 
     awk '$1 == bid {print $2}' bid="${batch_id}" "${sample_table}" > samples.list
     cut -f2,5 "${pedigree}" > ploidy.tsv
@@ -120,6 +127,8 @@ task VisualizeGenomicDisorders {
       ${min_rd_deviation} \
       ${padding} \
       ${min_shifted_bins} \
+      ${max_calls_per_sample} \
+      --violators "excess_calls_samples_${batch_id}.tsv" \
       "${gd_regions}" \
       "${segdups}" \
       "${bincov}" \
@@ -128,6 +137,7 @@ task VisualizeGenomicDisorders {
       ploidy.tsv \
       plots
 
+    touch "excess_calls_samples_${batch_id}.tsv"
     tar -cf "${batch_id}.tar" plots
   >>>
 }
@@ -135,18 +145,21 @@ task VisualizeGenomicDisorders {
 task MergePlotTars {
   input {
     Array[File] plot_tars
+    Array[File] excess_call_samples
     String tar_prefix
     String base_docker
   }
 
   parameter_meta {
     plot_tars: "Archives of plots."
+    excess_call_samples: "Samples with excess number of calls and their counts."
     tar_prefix: "What to name the output archive."
     base_docker: "Docker image."
   }
 
   output {
     File gd_plots = "${tar_prefix}.tar"
+    File excess_call_samples = "${tar_prefix}-excess_gds.tsv"
   }
 
   Float input_size = size(plot_tars, "GB")
@@ -167,6 +180,7 @@ task MergePlotTars {
     set -o pipefail
 
     plot_tars='~{write_lines(plot_tars)}'
+    excess_call_samples='~{write_lines(excess_call_samples)}'
     tar_prefix='~{tar_prefix}'
 
     mkdir temp
@@ -178,5 +192,8 @@ task MergePlotTars {
 
     mv temp "${tar_prefix}"
     tar -cf "${tar_prefix}.tar" "${tar_prefix}"
+
+    cat "${excess_call_samples}" \
+      | xargs cat > "${tar_prefix}-excess_gds.tsv"
   >>>
 }

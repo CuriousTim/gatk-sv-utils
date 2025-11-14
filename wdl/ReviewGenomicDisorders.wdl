@@ -7,7 +7,6 @@ workflow ReviewGenomicDisorders {
     File gd_regions
     Float? padding
     Float? min_rd_deviation
-    Float? min_shifted_bins
     Int? max_calls_per_sample
     File sample_table
     File segdups
@@ -39,7 +38,6 @@ workflow ReviewGenomicDisorders {
         pedigree = pedigree,
         min_rd_deviation = min_rd_deviation,
         padding = padding,
-        min_shifted_bins = min_shifted_bins,
         max_calls_per_sample = max_calls_per_sample,
         r_docker = r_docker
     }
@@ -65,7 +63,6 @@ task VisualizeGenomicDisorders {
     File segdups
     Float? min_rd_deviation
     Float? padding
-    Float? min_shifted_bins
     Float? max_calls_per_sample
     String r_docker
   }
@@ -81,7 +78,6 @@ task VisualizeGenomicDisorders {
     segdups: "Segmental duplication coordinates file."
     min_rd_deviation: "Minimum read depth ratio deviation from 1 required to make a plot."
     padding: "Fraction of GD region to add as padding."
-    min_shifted_bins: "Minimum number of consecutive bins that must have mean deviation."
     max_calls_per_sample: "Maximum number of call-regions per sample."
     r_docker: "Docker image."
   }
@@ -117,7 +113,6 @@ task VisualizeGenomicDisorders {
     segdups='~{segdups}'
     min_rd_deviation='~{if defined(min_rd_deviation) then "--min-shift ${min_rd_deviation}" else ""}'
     padding='~{if defined(padding) then "--pad ${padding}" else ""}'
-    min_shifted_bins='~{if defined(min_shifted_bins) then "--min-shifted-bins ${min_shifted_bins}" else ""}'
     max_calls_per_sample='~{if defined(max_calls_per_sample) then "--max-calls-per-sample ${max_calls_per_sample}" else ""}'
 
     awk '$1 == bid {print $2}' bid="${batch_id}" "${sample_table}" > samples.list
@@ -126,7 +121,6 @@ task VisualizeGenomicDisorders {
     Rscript /opt/gatk-sv-utils/scripts/visualize_gd.R \
       ${min_rd_deviation} \
       ${padding} \
-      ${min_shifted_bins} \
       ${max_calls_per_sample} \
       --violators "excess_calls_samples_${batch_id}.tsv" \
       "${gd_regions}" \

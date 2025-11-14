@@ -2,13 +2,13 @@
 #
 # Usage:
 # Rscript visualize_gd.R [options] <gd_regions> <sd_regions> <bincov> <medians> \
-#   <samples> <ploidy> <outdir>
+#   <samples> <sex_ploidy> <outdir>
 # gd_regions      genomic disorder regions to visualize
 # sd_regions      segmental duplications
 # bincov          binned coverage matrix
 # medians         coverage medians
 # samples         list of samples to check for CNVs
-# ploidy          ploidy table, 0 for unknown, 1 for male, 2 for female
+# sex_ploidy      sex choromosome ploidy table, 0 for unknown, 1 for male, 2 for female
 # outdir          output directory
 #
 # options
@@ -22,11 +22,54 @@
 # --max-calls-per-sample  maximum number of calls per sample
 # --violators             samples that had more than the max number of calls
 
+# maximum length of a sequence that can be indexed with tabix
 TABIX_MAX_SEQLEN <- 536870912L
+# the window to use for smoothing the binned coverage values before plotting
 ROLLING_MEDIAN_WINDOW <- 31
+# maximum number of background samples to plot
 MAX_BACKGROUND <- 200L
+# the fraction of bins to plot, low mostly to reduce computation
 BIN_PLOT_FRACTION <- 0.05
+# the fraction of the region to use as the window size for non-NAHR GDs
+NON_NAHR_WINDOW_PROP <- 0.01
+# the assumed width of each bin in the bincov matrix
+BIN_WIDTH <- 100
+# minimum number of bins (assuming 100 bp bins) overlapping a GD region required
+# to make a CNV call
+MIN_GD_OVP_BINS <- 50
 
+assert_coords_in_range <- function(x) {
+    if (any(x <= 0L | x > TABIX_MAX_SEQLEN)) {
+        stop(sprintf(
+            "only chromosome coordinates between 0 and %d are permitted",
+            TABIX_MAX_SEQLEN
+        ))
+    }
+}
+
+assert_hg38_chr <- function(x) {
+    if (any(!grepl("^chr([1-9]|1[0-9]|2[0-2]|X|Y)$", x))) {
+        stop("only chromosomes chr1-22,X,Y are permitted")
+    }
+}
+
+assert_positive_ranges <- function(start, end) {
+    if (any(end - start + 1L <= 0)) {
+        stop("only positive genomic ranges are permitted")
+    }
+}
+
+assert_valid_svtypes <- function(x) {
+    if (any(!x %in% c("DUP", "DEL"))) {
+        stop("only DUP and DEL SV types are permitted")
+    }
+}
+
+assert_valid_nahr <- function(x) {
+    if (any(!x %in% c("yes", "no"))) {
+        stop("NAHR values must be 'yes' or 'no'")
+    }
+}
 read_sd <- function(path) {
   tmp <- fread(path, header = FALSE, select = 1:3, sep = "\t")
   tmp <- tmp[V1 %in% paste0("chr", c(1:22, "X", "Y")), ]
@@ -57,12 +100,19 @@ read_medians_file <- function(path) {
     }
     medians <- as.double(strsplit(lines[[2]], split = "\t", fixed = TRUE)[[1]])
 
-    names(medians) <- ids
-
-    medians
+    setNames(medians, ids)
 }
 
-read_ploidy <- function(path) {
+read_samples_file <- function(path) {
+    tmp <- readLines(path)
+    if (length(tmp) == 0) {
+        stop("at least one sample to check for CNVs must be given")
+    }
+
+    tmp
+}
+
+read_sex_ploidy <- function(path) {
     tmp <- fread(path, header = FALSE, sep = "\t",
                  col.names = c("sample_id", "sex"),
                  colClasses = c("character", "integer"))
@@ -70,6 +120,29 @@ read_ploidy <- function(path) {
         stop("permitted values for sex are 0, 1, and 2")
     }
     tmp[sex == 0, sex := NA_integer_]
+    tmp
+}
+
+read_gd <- function(path) {
+    tmp <- fread(path, header = TRUE, sep = "\t", strip.white = FALSE,
+                 na.strings = "",
+                 colClasses = c("character", "integer", "integer", "character", "character", "character", "character"))
+    req_header <- c("chr", "start_GRCh38", "end_GRCh38", "GD_ID", "svtype", "NAHR", "cluster")
+    disp_header <- paste0(req_header, collapse = ", ")
+    if (!identical(colnames(tmp), req_header)) {
+        stop(sprintf("genomic disorder regions file must have header: '%s'",
+                     disp_header))
+    }
+
+    assert_hg38_chr(tmp$chr)
+    assert_coords_in_range(tmp$start_GRCh3)
+    assert_coords_in_range(tmp$end_GRCh38)
+    assert_positive_ranges(tmp$start_GRCh38, tmp$end_GRCh38)
+    assert_valid_svtypes(tmp$svtype)
+    assert_valid_nahr(tmp$NAHR)
+
+    tmp[, NAHR := NAHR == "yes"]
+
     tmp
 }
 
@@ -117,67 +190,69 @@ format_size <- function(size) {
 }
 
 get_sd_overlaps <- function(sds, chr, start, end) {
-    query <- GRanges(chr, IRanges(start, end))
-    ovp <- findOverlaps(query, sds)
+    ovp <- findOverlaps(GRanges(chr, IRanges(start, end)), sds)
     sds[subjectHits(ovp)]
 }
 
-predict_carriers <- function(bc, chr, ploidy, window, svtype, min_shift) {
-    if (nrow(bc) < 2) {
-        return(NA_character_)
+make_rd_shift_checker <- function(bc, chr, sex_ploidy, svtype, min_shift) {
+    if (chr == "chrX" || chr == "chrY") {
+        ploidy <- sex_ploidy[colnames(bc), sex]
+        if (chr == "chrY") {
+            ploidy[ploidy == 2] <- 0L
+        }
+        expected_rdr <- ploidy / 2
+    } else {
+        expected_rdr <- 1
     }
 
-    if (chr == "chrY") {
-        males <- ploidy[sex == 1L, sample_id]
-        if (length(males) == 0) {
-            return(character())
-        }
-        bc <- bc[, ..males]
-        if (svtype == "DUP") {
-            op <- function(x) { x >= 0.5 + min_shift}
-        } else {
-            op <- function(x) { x <= 0.5 - min_shift}
-        }
-    } else if (chr == "chrX") {
-        with_ploidy <- ploidy[!is.na(sex), sample_id]
-        if (length(with_ploidy) == 0) {
-            return(character())
-        }
-        bc <- bc[, colnames(bc) %in% with_ploidy, with = FALSE]
-        expected_rdr <- ploidy[colnames(bc), sex] / 2
-        if (svtype == "DUP") {
-            op <- function(x) { x >= expected_rdr + min_shift }
-        } else {
-            op <- function(x) { x <= expected_rdr - min_shift }
-        }
+    if (svtype == "DUP") {
+        op <- function(x) { !is.nan(x) & !is.na(x) & !is.na(expected_rdr) & x >= expected_rdr + min_shift }
     } else {
-        if (svtype == "DUP") {
-            op <- function(x) { x >= 1 + min_shift }
-        } else {
-            op <- function(x) { x <= 1 - min_shift}
-        }
+        op <- function(x) { !is.nan(x) & !is.na(x) & !is.na(expected_rdr) & x <= expected_rdr - min_shift }
     }
+
+    op
+}
+
+predict_carriers <- function(bc, sd_idx, gd_idx, window, filter) {
+    bc <- copy(bc)
+    bc[sd_idx, names(.SD) := list(NA_real_)]
+    gd_bc <- bc[gd_idx, ]
 
     if (!is.null(window)) {
-        if (nrow(bc) < window) {
-            return(NA_character_)
-        }
-        keep <- seq.int(ceiling(window / 2), nrow(bc) - floor(window / 2))
-        roll <- lapply(bc, \(x) runmed(x, window)[keep])
-        pass <- vapply(roll, \(x) any(op(x), na.rm = TRUE), logical(1))
+        keep <- seq.int(ceiling(window / 2), nrow(gd_bc) - floor(window / 2))
+        roll <- lapply(gd_bc, \(x) runmed(x, window)[keep])
+        pass <- vapply(roll, \(x) any(filter(x), na.rm = TRUE), logical(1))
         pass <- pass[pass == TRUE]
     } else {
-        m <- vapply(bc, median, double(1))
-        pass <- m[op(m)]
+        m <- vapply(gd_bc, \(x) median(x, na.rm = TRUE), double(1))
+        pass <- m[filter(m)]
     }
 
     names(pass)
 }
 
+validate_args <- function(x) {
+    if (!is.finite(x$min_shift) || x$min_shift < 0) {
+        stop("minimum shift must be a non-negative number")
+    }
+
+    if (!is.finite(x$pad) || x$pad < 0) {
+        stop("padding must be a non-negative number")
+    }
+
+    if (x$max_calls_per_sample < 0) {
+        stop("max calls per sample must be a non-negative number")
+    }
+
+    x
+}
+
 parse_args <- function() {
     args <- commandArgs(trailingOnly = TRUE)
     pos_args <- vector("list", 7)
-    opts <- list(min_shift = 0.3, pad = 0.5, min_shifted_bins = NULL, max_calls_per_sample = 3, violators = NULL)
+    opts <- list(min_shift = 0.3, pad = 0.5, min_shifted_bins = NULL,
+                 max_calls_per_sample = 3, violators = NULL)
     i <- 1
     j <- 1
     repeat {
@@ -196,7 +271,7 @@ parse_args <- function() {
             opts$min_shifted_bins <- as.integer(args[[i]])
         } else if (args[[i]] == "--max-calls-per-sample") {
             i <- i + 1
-            opts$max_calls_per_sample <- as.integer(args[[i]])
+            opts$max_calls_per_sample <- trunc(as.double(args[[i]]))
         } else if (args[[i]] == "--violators") {
             i <- i + 1
             opts$violators <- args[[i]]
@@ -211,8 +286,10 @@ parse_args <- function() {
     if (any(sapply(pos_args, is.null))) {
         stop("incorrect number of arguments")
     }
+    names(pos_args) <- c("gd_regions", "sd_regions", "bincov", "medians",
+                         "samples", "sex_ploidy", "outdir")
 
-    append(pos_args, opts)
+    validate_args(append(pos_args, opts))
 }
 
 add_plot_to_store <- function(h, s, path, cluster) {
@@ -247,49 +324,31 @@ suppressPackageStartupMessages(library(Rsamtools))
 
 argv <- parse_args()
 
-gd_regions <- fread(argv[[1]], header = TRUE, sep = "\t", strip.white = FALSE, na.strings = "")
-sd_regions <- read_sd(argv[[2]])
-bincov_con <- TabixFile(argv[[3]])
-cov_medians <- read_medians_file(argv[[4]])
-samples <- readLines(argv[[5]])
-ploidy <- read_ploidy(argv[[6]])
-outdir <- argv[[7]]
-min_shift <- argv[["min_shift"]]
-pad <- argv[["pad"]]
-min_shifted_bins <- argv[["min_shifted_bins"]]
-max_calls_per_sample <- argv[["max_calls_per_sample"]]
-violators <- argv[["violators"]]
+gd_regions <- read_gd(argv$gd_regions)
+sd_regions <- read_sd(argv$sd_regions)
+bincov_con <- TabixFile(argv$bincov)
+cov_medians <- read_medians_file(argv$medians)
+target_samples <- read_samples_file(argv$samples)
+sex_ploidy <- read_sex_ploidy(argv$sex_ploidy)
 
-dir.create(outdir)
-
-if (!is.finite(pad) || pad < 0) {
-    stop("padding must be a non-negative number")
-}
-if (!is.finite(min_shift) || min_shift < 0) {
-    stop("min shift must be a non-negative number")
-}
-if (!is.null(min_shifted_bins) && (!is.finite(min_shifted_bins) || min_shifted_bins < 2 || min_shifted_bins %% 2 == 0)) {
-    stop("min shifted bins must be an odd integer greater than 2")
-}
-if (length(samples) == 0) {
-    stop("at least one sample must be given")
-}
+dir.create(argv$outdir)
 
 header <- read_bincov_header(bincov_con)
-if (!all(samples %in% header)) {
+if (!all(target_samples %in% header)) {
     stop("all requested samples must be in the bincov matrix")
 }
 
-if (!all(samples %in% names(cov_medians))) {
+if (!all(target_samples %in% names(cov_medians))) {
     stop("all requested samples must be in the median coverage file")
 }
 
-ploidy <- ploidy[samples, nomatch = NA, on = "sample_id"]
-setkey(ploidy, sample_id)
+# sex chromosome ploidy is needed to call CNVs on chrX and chrY
+sex_ploidy <- sex_ploidy[target_samples, nomatch = NA, on = "sample_id"]
+setkey(sex_ploidy, sample_id)
 
 plots_store <- hashtab()
 
-pad_size <- gd_regions[, ceiling((end_GRCh38 - start_GRCh38 + 1L) * ..pad)]
+pad_size <- gd_regions[, ceiling((end_GRCh38 - start_GRCh38 + 1L) * argv$pad)]
 expanded_gd <- gd_regions[, list(chr = chr, start = pmax(1L, start_GRCh38 - pad_size), end = pmin(TABIX_MAX_SEQLEN, end_GRCh38 + pad_size))]
 for (i in seq_len(nrow(gd_regions))) {
     chr <- gd_regions[i, chr]
@@ -297,13 +356,13 @@ for (i in seq_len(nrow(gd_regions))) {
     gdend <- gd_regions[i, end_GRCh38]
     gdid <- gd_regions[i, GD_ID]
     svtype <- gd_regions[i, svtype]
-    cluster <- gd_regions[i, cluster]
+    nahr <- gd_regions[i, NAHR]
+    gdcluster <- gd_regions[i, cluster]
     qstart <- expanded_gd[i, start]
     qend <- expanded_gd[i, end]
-    message(sprintf("checking for genomic disorder at %s:%d-%d (%s)", chr, gdstart, gdend, svtype))
-    if (svtype != "DUP" && svtype != "DEL") {
-        stop("SV type must be 'DUP' or 'DEL'")
-    }
+    message(sprintf("checking for genomic disorder at %s:%d-%d (%s)",
+                    chr, gdstart, gdend, svtype))
+
     bc <- query_bincov(bincov_con, header, chr, qstart, qend)
     if (is.null(bc)) {
         message("no coverage intervals overlap query region")
@@ -311,15 +370,26 @@ for (i in seq_len(nrow(gd_regions))) {
     }
 
     bc_coords <- GRanges(bc[["chr"]], IRanges(bc[["start"]], bc[["end"]]))
-    bc[, c("chr", "start", "end") := list(NULL)]
-    bc <- bc[, ..samples]
-    nonsd_idx <- setdiff(seq_along(bc_coords), queryHits(findOverlaps(bc_coords, sd_regions)))
+    sd_idx <- queryHits(findOverlaps(bc_coords, sd_regions))
     gd_idx <- queryHits(findOverlaps(bc_coords, GRanges(chr, IRanges(gdstart, gdend))))
+    if (length(gd_idx) < MIN_GD_OVP_BINS) {
+        message("insufficient coverage intervals overlap query region")
+        next
+    }
+    bc[, c("chr", "start", "end") := list(NULL)]
+    bc <- bc[, ..target_samples]
 
-    # normalize
     norms <- bc[, mapply(`/`, .SD, ..cov_medians[names(.SD)], SIMPLIFY = FALSE)]
-
-    carriers <- predict_carriers(norms[intersect(nonsd_idx, gd_idx), ], chr, ploidy, min_shifted_bins, svtype, min_shift)
+    if (nahr) {
+        window <- NULL
+    } else {
+        window <- round((gdend - gdstart + 1) * NON_NAHR_WINDOW_PROP / BIN_WIDTH)
+        if (window %% 2 == 0) {
+            window <- window + 1
+        }
+    }
+    filter_func <- make_rd_shift_checker(norms, chr, sex_ploidy, svtype, argv$min_shift)
+    carriers <- predict_carriers(norms, sd_idx, gd_idx, window, filter_func)
 
     if (length(carriers) == 0) {
         message("no potential CNV carriers")
@@ -329,10 +399,10 @@ for (i in seq_len(nrow(gd_regions))) {
         next
     }
 
-    if (length(samples) - length(carriers) < MAX_BACKGROUND) {
-        bg_samples <- samples
+    if (length(target_samples) - length(carriers) < MAX_BACKGROUND) {
+        bg_samples <- target_samples
     } else {
-        bg_samples <- setdiff(samples, carriers)
+        bg_samples <- setdiff(target_samples, carriers)
     }
     bg_samples_to_plot <- sample(bg_samples, min(length(bg_samples), MAX_BACKGROUND))
 
@@ -355,8 +425,8 @@ for (i in seq_len(nrow(gd_regions))) {
         main <- sprintf("%s (hg38)\n%s (%s)", gdid, carrier_pretty, size_pretty)
         plot_name <- sprintf("%s_%d-%d_%s_%s_%s.jpg",
                              chr, gdstart, gdend, gdid, svtype, carrier_id)
-        plot_path <- file.path(outdir, plot_name)
-        add_plot_to_store(plots_store, carrier_id, plot_path, cluster)
+        plot_path <- file.path(argv$outdir, plot_name)
+        add_plot_to_store(plots_store, carrier_id, plot_path, gdcluster)
         jpeg(plot_path, res = 100, width = 960, height = 540)
         par(mar = c(3.1, 4.1, 4.1, 2.1))
         plot(NULL, main = main, xlim = range(mids), ylim = c(0, 3), ylab = "Normalized Read Depth Ratio", xlab = "", xaxs = "i", xaxt = "n")
@@ -385,5 +455,5 @@ for (i in seq_len(nrow(gd_regions))) {
     }
 }
 
-violators_con <- file(if (is.null(violators)) nullfile() else violators)
-maphash(plots_store, \(k, v) remove_outliers(k, v, max_calls_per_sample, violators_con))
+violators_con <- file(if (is.null(argv$violators)) nullfile() else argv$violators)
+maphash(plots_store, \(k, v) remove_outliers(k, v, argv$max_calls_per_sample, violators_con))

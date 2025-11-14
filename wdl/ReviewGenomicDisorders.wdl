@@ -47,6 +47,7 @@ workflow ReviewGenomicDisorders {
     input:
       plot_tars = VisualizeGenomicDisorders.plots,
       tar_prefix = tar_prefix,
+      excess_call_samples = VisualizeGenomicDisorders.excess_call_samples,
       base_docker = base_docker
   }
 }

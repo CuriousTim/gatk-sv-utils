@@ -16,9 +16,6 @@
 #                         considered a CNV carrier
 # --pad                   fraction by which the genomic disorder region should be expanded
 #                         for plotting
-# --min-shifted-bins      number of consecutive bins that must have a mean read depth
-#                         shifted from 1, overriding the default of mean over the
-#                         entire region
 # --max-calls-per-sample  maximum number of calls per sample
 # --violators             samples that had more than the max number of calls
 
@@ -251,7 +248,7 @@ validate_args <- function(x) {
 parse_args <- function() {
     args <- commandArgs(trailingOnly = TRUE)
     pos_args <- vector("list", 7)
-    opts <- list(min_shift = 0.3, pad = 0.5, min_shifted_bins = NULL,
+    opts <- list(min_shift = 0.3, pad = 0.5,
                  max_calls_per_sample = 3, violators = NULL)
     i <- 1
     j <- 1
@@ -266,9 +263,6 @@ parse_args <- function() {
         } else if (args[[i]] == "--pad") {
             i <- i + 1
             opts$pad <- as.double(args[[i]])
-        } else if (args[[i]] == "--min-shifted-bins") {
-            i <- i + 1
-            opts$min_shifted_bins <- as.integer(args[[i]])
         } else if (args[[i]] == "--max-calls-per-sample") {
             i <- i + 1
             opts$max_calls_per_sample <- trunc(as.double(args[[i]]))

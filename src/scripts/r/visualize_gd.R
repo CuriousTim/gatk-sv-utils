@@ -300,13 +300,15 @@ add_plot_to_store <- function(h, s, path, cluster) {
     val[["paths"]] <- append(val[["paths"]], path)
 
     if (!is.na(cluster) && is.null(gethash(val[["clusters"]], cluster))) {
-        val[["clusters"]] <- sethash(val[["clusters"]], cluster, NULL)
+        sethash(val[["clusters"]], cluster, NULL)
         val[["count"]] <- val[["count"]] + 1L
     }
 
     if (is.na(cluster)) {
         val[["count"]] <- val[["count"]] + 1L
     }
+
+    sethash(h, s, val)
 }
 
 remove_outliers <- function(k, v, max_count, con) {

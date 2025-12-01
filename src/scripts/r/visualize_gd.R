@@ -266,7 +266,7 @@ make_rdr_shift_filter <- function(svtype, min_shift) {
     }
 
     function(expected, actual) {
-        !is.nan(actual) & !is.na(actual) & op(expected, actual)
+        !is.nan(actual) & !is.na(actual) & !is.na(expected) & op(expected, actual)
     }
 }
 

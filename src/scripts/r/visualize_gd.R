@@ -37,6 +37,16 @@ BIN_WIDTH <- 100
 # required to make a CNV call
 NAHR_WINDOW_MIN_BINS <- 50
 
+# HG38 pseudoautosomal regions
+CHRX_PAR1_START <- 10001
+CHRX_PAR1_END <- 2781479
+CHRX_PAR2_START <-155701383
+CHRX_PAR2_END <- 156030895
+CHRY_PAR1_START <- 10001
+CHRY_PAR1_END <- 2781479
+CHRY_PAR2_START <- 56887903
+CHRY_PAR2_END <- 57217415
+
 HG38_PRIMARY_CONTIGS <- paste0("chr", c(1:22, "X", "Y"))
 
 assert_hg38_contigs <- function(x) {
@@ -235,17 +245,39 @@ make_bincov_getter <- function(con, header, samples, medians) {
     }
 }
 
-# Compute the expected read depth ratio for some samples for a chromosome given
-# the sex of the samples (NA = unknown, 1 = male, 2 = female).
-get_expected_rdr <- function(chr, sex_ploidy) {
-    if (chr == "chrX" || chr == "chrY") {
-        if (chr == "chrY") {
-            sex_ploidy[sex_ploidy == 2] <- 0L
+# Helper function to check if coordinates overlap.
+coordinates_ovp <- function(x1, y1, x2, y2) {
+    x1 <= y2 & y1 >= x2
+}
+
+ovp_chry_par <- function(start, end) {
+    coordinates_ovp(start, end, CHRY_PAR1_START, CHRY_PAR1_END) |
+        coordinates_ovp(start, end, CHRY_PAR2_START, CHRY_PAR2_END)
+}
+
+ovp_chrx_par <- function(start, end) {
+    coordinates_ovp(start, end, CHRX_PAR1_START, CHRX_PAR1_END) |
+        coordinates_ovp(start, end, CHRX_PAR2_START, CHRX_PAR2_END)
+}
+
+# Compute the expected read depth ratio for some samples for a chromosome at a
+# given region given the sex of the samples
+# (NA = unknown, 1 = male, 2 = female).
+get_expected_rdr <- function(chr, start, end, sex_ploidy) {
+    expected <- if (chr == "chrX" && ovp_chrx_par(start, end)) {
+        sex_ploidy[sex_ploidy == 1L] <- 2L
+        sex_ploidy
+    } else if (chr == "chrY") {
+        sex_ploidy[sex_ploidy == 2L] <- 0L
+        if (ovp_chry_par(start, end)) {
+            sex_ploidy[sex_ploidy == 1L] <- 2L
         }
-        sex_ploidy / 2
+        sex_ploidy
     } else {
-        rep_len(1, length(sex_ploidy))
+        rep_len(2, length(sex_ploidy))
     }
+
+    expected / 2L
 }
 
 # Compute the sliding window size for non-NAHR GD regions.
@@ -282,7 +314,7 @@ make_rdr_shift_filter <- function(svtype, min_shift) {
 # For non-terminal GDs, at least one window in the region must have a shifted
 # median read depth ratio.
 predict_gd_carriers <- function(gd, bc, sex_ploidy, min_shift) {
-    expected_rdr <- get_expected_rdr(gd$chr, sex_ploidy)
+    expected_rdr <- get_expected_rdr(gd$chr, gd$start_GRCh38, gd$end_GRCh38, sex_ploidy)
     filter_rdr <- make_rdr_shift_filter(gd$svtype, min_shift)
 
     if (gd$NAHR) {

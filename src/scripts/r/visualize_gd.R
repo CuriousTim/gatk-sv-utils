@@ -187,9 +187,10 @@ read_sex_ploidy <- function(path) {
     if (any(!tmp$sex %in% c(0L, 1L, 2L))) {
         stop("permitted values for sex are 0, 1, and 2")
     }
+
     tmp[sex == 0, sex := NA_integer_]
 
-    tmp
+    unique(tmp, by = "sample_id")
 }
 
 # Read the genomic disorders table
@@ -264,8 +265,10 @@ ovp_chrx_par <- function(start, end) {
 # given region given the sex of the samples
 # (NA = unknown, 1 = male, 2 = female).
 get_expected_rdr <- function(chr, start, end, sex_ploidy) {
-    expected <- if (chr == "chrX" && ovp_chrx_par(start, end)) {
-        sex_ploidy[sex_ploidy == 1L] <- 2L
+    tmp <- if (chr == "chrX") {
+        if (ovp_chrx_par(start, end)) {
+            sex_ploidy[sex_ploidy == 1L] <- 2L
+        }
         sex_ploidy
     } else if (chr == "chrY") {
         sex_ploidy[sex_ploidy == 2L] <- 0L
@@ -277,7 +280,7 @@ get_expected_rdr <- function(chr, start, end, sex_ploidy) {
         rep_len(2, length(sex_ploidy))
     }
 
-    expected / 2L
+    tmp / 2
 }
 
 # Compute the sliding window size for non-NAHR GD regions.

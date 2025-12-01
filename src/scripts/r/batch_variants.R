@@ -1,4 +1,4 @@
-# Usage: Rscript batch_variants.R <cnvs> <sample_table> <outdir>
+# Usage: Rscript batch_variants.R <cnvs> <sample_table> <outdir> <pad>
 #
 # Creates manifests that can be used to subset the bincov matrices. A manifest
 # is created for each batch that would need to be queried.

@@ -31,6 +31,9 @@ BIN_PLOT_FRACTION <- 0.05
 NON_NAHR_WINDOW_PROP <- 0.01
 # the minimum number of windows to use as the window size for non-NAHR GDs
 NON_NAHR_WINDOW_MIN_BINS <- 101
+# the fraction of terminal non-NAHR regions that should be used as the window
+# size
+TERMINALS_WINDOW_PROP <- 0.2
 # the assumed width of each bin in the bincov matrix
 BIN_WIDTH <- 100
 # minimum number of bins (assuming 100 bp bins) overlapping a NAHR GD region
@@ -284,8 +287,9 @@ get_expected_rdr <- function(chr, start, end, sex_ploidy) {
 }
 
 # Compute the sliding window size for non-NAHR GD regions.
-non_nahr_window_size <- function(gdstart, gdend) {
-    max(NON_NAHR_WINDOW_MIN_BINS, round((gdend - gdstart  + 1) * NON_NAHR_WINDOW_PROP / BIN_WIDTH))
+non_nahr_window_size <- function(gdstart, gdend, terminal) {
+    frac <- if (terminal == "p" || terminal == "q") TERMINALS_WINDOW_PROP else NON_NAHR_WINDOW_PROP
+    max(NON_NAHR_WINDOW_MIN_BINS, round((gdend - gdstart  + 1) * frac / BIN_WIDTH))
 }
 
 # Return a function that compares the expected and actual read depth ratios and
@@ -324,7 +328,7 @@ predict_gd_carriers <- function(gd, bc, sex_ploidy, min_shift) {
         m <- vapply(bc, \(x) median(x, na.rm = TRUE), double(1))
         names(m[filter_rdr(expected_rdr, m)])
     } else {
-        window_size <- non_nahr_window_size(gd$start_GRCh38, gd$end_GRCh38)
+        window_size <- non_nahr_window_size(gd$start_GRCh38, gd$end_GRCh38, gd$terminal)
         if (window_size %% 2 == 0) {
             window_size <- window_size + 1
         }

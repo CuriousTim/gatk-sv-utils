@@ -39,8 +39,6 @@ BIN_WIDTH <- 100
 # minimum number of bins (assuming 100 bp bins) overlapping a NAHR GD region
 # required to make a CNV call
 NAHR_WINDOW_MIN_BINS <- 50
-# padding by which to increase segmental duplication regions
-SEGDUP_PAD_BP <- 500
 
 # HG38 pseudoautosomal regions
 CHRX_PAR1_START <- 10001
@@ -141,8 +139,6 @@ read_sd <- function(path) {
     assert_positive_range(tmp$V2, tmp$V3)
 
     tmp <- unique(tmp)
-    tmp[, V2 := pmax(1, V2 - SEGDUP_PAD_BP)]
-    tmp[, V3 := pmin(TABIX_MAX_SEQLEN, V3 + SEGDUP_PAD_BP)]
     reduce(GRanges(tmp[["V1"]], IRanges(tmp[["V2"]], tmp[["V3"]])))
 }
 

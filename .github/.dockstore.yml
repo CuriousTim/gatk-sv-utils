@@ -152,3 +152,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: MakeGDRevisionTable
+    subclass: WDL
+    primaryDescriptorPath: /wdl/MakeGDRevisionTable.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

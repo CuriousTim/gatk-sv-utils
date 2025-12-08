@@ -71,7 +71,7 @@ task CheckVCFForGDs {
     shard_index='~{shard_index}'
 
     # the script silently skips GDs on contigs not in the VCF
-    python3 /opt/gatk-sv-utils/script/compare_gds_to_vcf.py "${gd_table}" \
+    python3 /opt/gatk-sv-utils/scripts/compare_gds_to_vcf.py "${gd_table}" \
       "${vcf}" "remove_vids-${shard_index}.txt" "missing-${shard_index}.tsv"
   >>>
 }

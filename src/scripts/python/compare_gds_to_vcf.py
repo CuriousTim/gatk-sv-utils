@@ -37,7 +37,6 @@ import pysam
 from pysam import VariantFile
 
 
-
 class SVType(Enum):
     DEL = enum.auto()
     DUP = enum.auto()
@@ -58,7 +57,6 @@ class SVType(Enum):
 
     def __str__(self):
         return f"{self.name}"
-
 
 
 class Interval:
@@ -199,6 +197,7 @@ class GDComparator:
     def __init__(self, gdfile, variantfile):
         self.gdfile = gdfile
         self.variantfile = variantfile
+        self.variantfile_samples = set(variantfile.header.samples)
 
     def get_matches(self, min_ovp):
         with self.gdfile as g:
@@ -206,6 +205,10 @@ class GDComparator:
                 gdvar = gdrecord.variant
                 if not gdvar.contig in self.variantfile.index:
                     continue
+                # just in case there are samples in the GD file that aren't in the VCF
+                gdrecord.carriers = gdrecord.carriers.intersection(
+                    self.variantfile_samples
+                )
                 for rec in self.variantfile.fetch(
                     gdvar.contig, gdvar.interval.start, gdvar.interval.end
                 ):
@@ -233,7 +236,9 @@ def compare(gds, vcf, matches, mismatches):
             if len(missing) == 0:
                 f.write(f"{vcfrec.vid}\n")
             else:
-                g.write(f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{",".join(missing)}\n")
+                g.write(
+                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{",".join(missing)}\n"
+                )
 
 
 def main():

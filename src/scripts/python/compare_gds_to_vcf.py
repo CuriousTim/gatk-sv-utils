@@ -212,7 +212,11 @@ class GDComparator:
                 for rec in self.variantfile.fetch(
                     gdvar.contig, gdvar.interval.start, gdvar.interval.end
                 ):
-                    vcfrecord = VCFRecord(rec)
+                    try:
+                        vcfrecord = VCFRecord(rec)
+                    except ValueError(e):
+                        # raised by CNV.__init__() so assume SV type is not CNV, which might not be the problem
+                        continue
                     if vcfrecord.overlaps_gd(gdrecord, min_ovp):
                         yield (gdrecord, vcfrecord)
 

@@ -21,6 +21,7 @@ workflow MakeGDRevisionTable {
         gd_table = gd_table,
         vcf = vcfs[i],
         vcf_index = vcf_indices[i],
+        shard_index = i,
         python_docker = python_docker
     }
   }

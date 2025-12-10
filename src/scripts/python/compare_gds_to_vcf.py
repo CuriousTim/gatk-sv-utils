@@ -214,7 +214,7 @@ class GDComparator:
                 ):
                     try:
                         vcfrecord = VCFRecord(rec)
-                    except ValueError(e):
+                    except ValueError:
                         # raised by CNV.__init__() so assume SV type is not CNV, which might not be the problem
                         continue
                     if vcfrecord.overlaps_gd(gdrecord, min_ovp):

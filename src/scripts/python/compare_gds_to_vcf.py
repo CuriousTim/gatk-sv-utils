@@ -150,7 +150,7 @@ class VCFRecord:
     def __init__(self, vr):
         self.variant = CNV.from_parts(vr.contig, vr.pos, vr.stop, vr.info["SVTYPE"])
         self.vid = vr.id
-        self.carriers = VCFRecord._gt_to_carriers(vr.samples)
+        self.carriers = set(VCFRecord._gt_to_carriers(vr.samples))
 
     def overlaps_gd(self, gdrecord, min_ovp):
         return self.variant.matches(gdrecord.variant, min_ovp)

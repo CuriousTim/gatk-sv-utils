@@ -98,7 +98,7 @@ task Merge {
 
   output {
     File merged_remove_vids = "${output_prefix}-gd_remove_vids.txt"
-    File merged_missing = "${output_prefix}-gd_missing.txt"
+    File merged_missing = "${output_prefix}-gd_missing.tsv"
   }
 
   command <<<
@@ -111,6 +111,6 @@ task Merge {
     output_prefix='~{output_prefix}'
 
     cat "${remove_vids}" | xargs cat > "${output_prefix}-gd_remove_vids.txt"
-    cat "${missing}" | xargs cat > "${output_prefix}-gd_missing.txt"
+    cat "${missing}" | xargs cat > "${output_prefix}-gd_missing.tsv"
   >>>
 }

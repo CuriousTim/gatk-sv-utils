@@ -16,7 +16,8 @@ start (1-based)
 end (closed end)
 GD ID
 SV type
-carriers (comma-separated)
+VCF carriers in GD file (comma-separated)
+VCF carriers not in GD file (comma-separated)
 
 The format of <matches> is a list of VCF IDs
 
@@ -227,8 +228,7 @@ def compare(gds, vcf, matches, mismatches):
     For each CNV in `gds`, find each matching CNV in `vcf` and compare the
     carriers of the two. If the two have the same set of carriers, write the VCF
     ID to `matches`. If the two do not have the same set of carriers, write the
-    variant and the discordant carriers (should be in VCF but are not) to
-    `mismatches`.
+    variant and the discordant carriers to `mismatches`.
     """
     gdc = GDComparator(gds, vcf)
     with (
@@ -236,12 +236,13 @@ def compare(gds, vcf, matches, mismatches):
         open(mismatches, mode="w", encoding="utf-8") as g,
     ):
         for gdrec, vcfrec in gdc.get_matches(0.5):
-            missing = gdrec.carriers.difference(vcfrec.carriers)
-            if len(missing) == 0:
+            common = gdrec.carriers.intersection(vcfrec.carriers)
+            only_vcf = vcfrec.carriers.difference(gdrec.carriers)
+            if len(only_vcf) == 0:
                 f.write(f"{vcfrec.vid}\n")
             else:
                 g.write(
-                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{",".join(missing)}\n"
+                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{",".join(common)}\t{",".join(only_vcf)}\n"
                 )
 
 

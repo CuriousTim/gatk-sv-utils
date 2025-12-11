@@ -203,7 +203,7 @@ class GDFile:
     def records(self):
         if self.fp and not self.fp.closed:
             for line in self.fp:
-                fields = line.rstrip().split("\t")
+                fields = line.rstrip("\n").split("\t")
                 yield GDFileRecord(*fields)
 
 

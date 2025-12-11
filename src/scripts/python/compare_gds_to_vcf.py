@@ -1,9 +1,9 @@
 """
 Compare manually reviewed genomic disoder CNVs against a VCF.
 
-usage: compare_gds_to_vcf.py <gds> <vcf> <matches> <mismatches>
+usage: compare_gds_to_vcf.py <tp_gds> <vcf> <matches> <mismatches>
 
-<gds>         Table of genomic disorders and their carriers.
+<gds>         Table of genomic disorders with carriers and non-carriers.
 <vcf>         VCF.
 <matches>     Variants in VCF for which all carriers match the
               carriers of the GD.
@@ -16,18 +16,25 @@ start (1-based)
 end (closed end)
 GD ID
 SV type
-VCF carriers in GD file (comma-separated)
-VCF carriers not in GD file (comma-separated)
+Manually validated carrriers (comma-separated)
+Manually validated non-carriers (comma-separated)
 
-The format of <matches> is a list of VCF IDs
+<matches> will contain the IDs of variants in the VCF that match a GD CNV and
+for which the set of the GD carriers is equal to the set of VCF variant
+carriers.
 
+<mismatches> will contain a table of VCF variants that match a GD CNV, but
+there is discordance between the VCF variant carriers and the GD CNV
+carriers.
 The format of <mismatches> is a tab-delimited file with columns:
 VCF ID
 VCF start
 VCF end
 SV type
 GD ID
-non-carriers
+VCF carriers that are manually reviewed GD carriers (comma-separated)
+VCF carriers that are manually reviewed non-GD carriers (comma-separated)
+VCF carriers that are not in the previous two categories (comma-separated)
 """
 
 import sys
@@ -163,14 +170,20 @@ class VCFRecord:
 
     @staticmethod
     def _gt_has_allele(gt):
-        return len(gt) == 2 and gt[0] and gt[1] and (gt[0] == 1 or gt[1] == 1)
+        return (
+            len(gt) == 2
+            and (gt[0] is not None)
+            and (gt[1] is not None)
+            and (gt[0] == 1 or gt[1] == 1)
+        )
 
 
 class GDFileRecord:
-    def __init__(self, contig, start, end, gdid, svtype, carriers):
+    def __init__(self, contig, start, end, gdid, svtype, carriers, non_carriers):
         self.variant = CNV.from_parts(contig, int(start), int(end), svtype)
         self.gdid = gdid
         self.carriers = set(carriers.split(","))
+        self.non_carriers = set(non_carriers.split(","))
 
 
 class GDFile:
@@ -210,6 +223,9 @@ class GDComparator:
                 gdrecord.carriers = gdrecord.carriers.intersection(
                     self.variantfile_samples
                 )
+                gdrecord.carriers = gdrecord.non_carriers.intersection(
+                    self.variantfile_samples
+                )
                 for rec in self.variantfile.fetch(
                     gdvar.contig, gdvar.interval.start, gdvar.interval.end
                 ):
@@ -236,13 +252,17 @@ def compare(gds, vcf, matches, mismatches):
         open(mismatches, mode="w", encoding="utf-8") as g,
     ):
         for gdrec, vcfrec in gdc.get_matches(0.5):
-            common = gdrec.carriers.intersection(vcfrec.carriers)
-            only_vcf = vcfrec.carriers.difference(gdrec.carriers)
-            if len(only_vcf) == 0:
+            # GD CNV carriers that are VCF CNV carriers
+            common_tp = gdrec.carriers.intersection(vcfrec.carriers)
+            # GD CNV non-carriers that are VCF CNV carriers
+            common_tn = gdrec.non_carriers.intersection(vcfrec.carriers)
+            # VCF CNV carriers not in previous sets
+            others = vcfrec.carriers.difference(common_tp.union(common_tn))
+            if len(common_tn) == 0 and len(others) == 0:
                 f.write(f"{vcfrec.vid}\n")
             else:
                 g.write(
-                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{",".join(common)}\t{",".join(only_vcf)}\n"
+                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{",".join(common_tp)}\t{",".join(common_tn)}\t{",".join(others)}\n"
                 )
 
 

@@ -229,6 +229,8 @@ class GDComparator:
                 for rec in self.variantfile.fetch(
                     gdvar.contig, gdvar.interval.start, gdvar.interval.end
                 ):
+                    if not ("PASS" in rec.filter or "FAIL_MANUAL_REVIEW" in rec.filter):
+                        continue
                     try:
                         vcfrecord = VCFRecord(rec)
                     except ValueError:

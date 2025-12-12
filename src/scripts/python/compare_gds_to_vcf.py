@@ -15,6 +15,7 @@ chr
 start (1-based)
 end (closed end)
 GD ID
+cluster ID
 SV type
 Manually validated carrriers (comma-separated)
 Manually validated non-carriers (comma-separated)
@@ -178,98 +179,117 @@ class VCFRecord:
         )
 
 
-class GDFileRecord:
-    def __init__(self, contig, start, end, gdid, svtype, carriers, non_carriers):
+class GDRecord:
+    def __init__(
+        self, contig, start, end, gdid, clustid, svtype, carriers, non_carriers
+    ):
         self.variant = CNV.from_parts(contig, int(start), int(end), svtype)
         self.gdid = gdid
+        self.clustid = None
         self.carriers = set(carriers.split(","))
         self.non_carriers = set(non_carriers.split(","))
 
 
-class GDFile:
-    def __init__(self, path):
-        self.path = path
-        self.fp = None
+class GDTable:
+    def __init__(self, records, clusters):
+        self.records = records
+        self.clusters = clusters
 
-    def __enter__(self):
-        self.fp = open(self.path, encoding="utf-8")
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if self.fp:
-            self.fp.close()
-            self.fp = None
-
-    def records(self):
-        if self.fp and not self.fp.closed:
-            for line in self.fp:
+    @classmethod
+    def from_file(cls, path):
+        records = list()
+        clusters = dict()
+        with open(path, mode="r", encoding="utf-8") as f:
+            for line in f:
                 fields = line.rstrip("\n").split("\t")
-                yield GDFileRecord(*fields)
+                rec = GDRecord(*fields)
+                records.append(rec)
+                if rec.clustid is not None:
+                    clusters.get(rec.clustid, set()).update(rec.carriers)
+        return cls(records, clusters)
+
+    def iter_records(self):
+        for rec in self.records:
+            yield rec
 
 
 class GDComparator:
-    def __init__(self, gdfile, variantfile):
-        self.gdfile = gdfile
+    def __init__(self, gdtable, variantfile):
+        self.gdtable = gdtable
         self.variantfile = variantfile
         self.variantfile_samples = set(variantfile.header.samples)
 
     def get_matches(self, min_ovp):
-        with self.gdfile as g:
-            for gdrecord in g.records():
-                gdvar = gdrecord.variant
-                if not gdvar.contig in self.variantfile.index:
-                    continue
-                # just in case there are samples in the GD file that aren't in the VCF
-                gdrecord.carriers = gdrecord.carriers.intersection(
-                    self.variantfile_samples
-                )
-                gdrecord.carriers = gdrecord.non_carriers.intersection(
-                    self.variantfile_samples
-                )
-                for rec in self.variantfile.fetch(
-                    gdvar.contig, gdvar.interval.start, gdvar.interval.end
+        for gdrec in self.gdtable.iter_records():
+            gdvar = gdrec.variant
+            if not gdvar.contig in self.variantfile.index:
+                continue
+            for vfilerec in self.variantfile.fetch(
+                gdvar.contig, gdvar.interval.start, gdvar.interval.end
+            ):
+                if not (
+                    "PASS" in vfilerec.filter or "FAIL_MANUAL_REVIEW" in vfilerec.filter
                 ):
-                    if not ("PASS" in rec.filter or "FAIL_MANUAL_REVIEW" in rec.filter):
-                        continue
-                    try:
-                        vcfrecord = VCFRecord(rec)
-                    except ValueError:
-                        # raised by CNV.__init__() so assume SV type is not CNV, which might not be the problem
-                        continue
-                    if vcfrecord.overlaps_gd(gdrecord, min_ovp):
-                        yield (gdrecord, vcfrecord)
+                    continue
+                try:
+                    vcfrec = VCFRecord(vfilerec)
+                except ValueError:
+                    # raised by CNV.__init__() so assume SV type is not CNV, which might not be the problem
+                    continue
+                if not vcfrec.overlaps_gd(gdrec, min_ovp):
+                    continue
+
+                c1, c2, c3, c4 = GDComparator._get_sample_overlaps(vcfrec, gdrec, self.gdtable)
+                yield (vcfrec, gdrec, c1, c2, c3, c4)
+
+    @staticmethod
+    def _get_sample_overlaps(vcfrec, gdrec, gdtable):
+        if gdrec.clustid is None:
+            cluster_carriers = set()
+        else:
+            # every cluster ID should have an entry
+            cluster_carriers = gdtable.clusters[gdrec.clustid]
+        # VCF carriers that are true GD carriers
+        c1 = vcfrec.carriers.intersection(gdrec.carriers)
+        # VCF carriers that are true GD non-carriers for this GD, but a carrier
+        # for a different GD in the same cluster
+        c2 = vcfrec.carriers.intersection(gdrec.non_carriers).intersection(
+            cluster_carriers
+        )
+        # VCF carriers that are true GD non-carriers for this GD and not a
+        # carrier for a different GD in the same cluster
+        c3 = vcfrec.carriers.intersection(gdrec.non_carriers).difference(
+            cluster_carriers
+        )
+        # VCF carriers that are not otherwise classified
+        c4 = vcfrec.carriers.difference(
+            gdrec.carriers.intersection(gdrec.non_carriers)
+        )
+        return (c1, c2, c3, c4)
 
 
 def compare(gds, vcf, matches, mismatches):
-    """Compare genomic disoder CNVs to variants in a VCF.
-
-    For each CNV in `gds`, find each matching CNV in `vcf` and compare the
-    carriers of the two. If the two have the same set of carriers, write the VCF
-    ID to `matches`. If the two do not have the same set of carriers, write the
-    variant and the discordant carriers to `mismatches`.
-    """
     gdc = GDComparator(gds, vcf)
+    rm_vids = set()
+    other_vids = set()
     with (
         open(matches, mode="w", encoding="utf-8") as f,
         open(mismatches, mode="w", encoding="utf-8") as g,
     ):
-        for gdrec, vcfrec in gdc.get_matches(0.5):
-            # GD CNV carriers that are VCF CNV carriers
-            common_tp = gdrec.carriers.intersection(vcfrec.carriers)
-            # GD CNV non-carriers that are VCF CNV carriers
-            common_tn = gdrec.non_carriers.intersection(vcfrec.carriers)
-            # VCF CNV carriers not in previous sets
-            others = vcfrec.carriers.difference(common_tp.union(common_tn))
-            if len(common_tn) == 0 and len(others) == 0:
-                f.write(f"{vcfrec.vid}\n")
+        for vcfrec, gdrec, c1, c2, c3, c4 in gdc.get_matches(0.5):
+            if len(c3) == 0 and len(c4) == 0:
+                rm_vids.add(vcfrec.vid)
             else:
+                other_vids.add(vcfrec.vid)
                 g.write(
-                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{",".join(common_tp)}\t{",".join(common_tn)}\t{",".join(others)}\n"
+                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{','.join(c1)}\t{','.join(c2)}\t{','.join(c3)}\t{','.join(c4)}\n"
                 )
+        rm_vids.difference_update(other_vids)
+        f.writelines(rm_vids)
 
 
 def main():
-    gds = GDFile(sys.argv[1])
+    gds = GDTable.from_file(sys.argv[1])
     vcf = VariantFile(sys.argv[2], mode="r")
     matches = sys.argv[3]
     mismatches = sys.argv[4]

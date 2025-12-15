@@ -239,7 +239,9 @@ class GDComparator:
                 if not vcfrec.overlaps_gd(gdrec, min_ovp):
                     continue
 
-                c1, c2, c3, c4 = GDComparator._get_sample_overlaps(vcfrec, gdrec, self.gdtable)
+                c1, c2, c3, c4 = GDComparator._get_sample_overlaps(
+                    vcfrec, gdrec, self.gdtable
+                )
                 yield (vcfrec, gdrec, c1, c2, c3, c4)
 
     @staticmethod
@@ -250,21 +252,16 @@ class GDComparator:
             # every cluster ID should have an entry
             cluster_carriers = gdtable.clusters[gdrec.clustid]
         # VCF carriers that are true GD carriers
-        c1 = vcfrec.carriers.intersection(gdrec.carriers)
+        c1 = vcfrec.carriers & gdrec.carriers
         # VCF carriers that are true GD non-carriers for this GD, but a carrier
         # for a different GD in the same cluster
-        c2 = vcfrec.carriers.intersection(gdrec.non_carriers).intersection(
-            cluster_carriers
-        )
+        c2 = vcfrec.carriers & gdrec.non_carriers & cluster_carriers
         # VCF carriers that are true GD non-carriers for this GD and not a
         # carrier for a different GD in the same cluster
-        c3 = vcfrec.carriers.intersection(gdrec.non_carriers).difference(
-            cluster_carriers
-        )
+        c3 = (vcfrec.carriers & gdrec.non_carriers) - cluster_carriers
         # VCF carriers that are not otherwise classified
-        c4 = vcfrec.carriers.difference(
-            gdrec.carriers.intersection(gdrec.non_carriers)
-        )
+        c4 = vcfrec.carriers - c1 - c2 - c3
+
         return (c1, c2, c3, c4)
 
 
@@ -284,6 +281,7 @@ def compare(gds, vcf, matches, mismatches):
                 g.write(
                     f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{','.join(c1)}\t{','.join(c2)}\t{','.join(c3)}\t{','.join(c4)}\n"
                 )
+        # only want to remove VCF variants that would not otherwise be modified
         rm_vids.difference_update(other_vids)
         f.writelines(rm_vids)
 

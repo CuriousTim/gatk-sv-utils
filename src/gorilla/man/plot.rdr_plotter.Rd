@@ -4,7 +4,7 @@
 \alias{plot.rdr_plotter}
 \title{Plot an \code{rdr_plotter}.}
 \usage{
-\method{plot}{rdr_plotter}(x, y = NULL, ...)
+\method{plot}{rdr_plotter}(x, y = NULL, main = NULL, carrier = NULL, ...)
 }
 \arguments{
 \item{x}{An \code{rdr_plotter} object.}
@@ -16,6 +16,8 @@
 \item{carrier}{Which carriers to plot, if \code{x} has carriers. If 0, no
 carriers are plotting. If \code{NULL}, all carriers are plotted. If an integer
 or character vector, it will be used as an index into the carriers vector.}
+
+\item{...}{Kept for compatibility with the \code{plot} generic. Ignored here.}
 }
 \description{
 Plot an \code{rdr_plotter}.

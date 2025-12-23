@@ -81,14 +81,14 @@ validate_rdr_plotter <- function(x) {
 #' @param carrier Which carriers to plot, if `x` has carriers. If 0, no
 #'   carriers are plotting. If `NULL`, all carriers are plotted. If an integer
 #'   or character vector, it will be used as an index into the carriers vector.
+#' @param ... Kept for compatibility with the `plot` generic. Ignored here.
 #' @export
-plot.rdr_plotter <- function(x, y = NULL, ...) {
-    dots <- list(...)
+plot.rdr_plotter <- function(x, y = NULL, main = NULL, carrier = NULL, ...) {
     old_par <- graphics::par(no.readonly = TRUE)
     graphics::par(mar = c(3.1, 4.1, 4.1, 2.1))
-    rdr_plotter_plot_base(x, dots[["main"]])
+    rdr_plotter_plot_base(x, main)
     rdr_plotter_plot_bg(x)
-    rdr_plotter_plot_carriers(x, dots[["carrier"]])
+    rdr_plotter_plot_carriers(x, carrier)
     rdr_plotter_plot_segdups(x)
     rdr_plotter_plot_pad(x)
     rdr_plotter_plot_axis(x)

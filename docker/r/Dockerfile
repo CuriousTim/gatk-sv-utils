@@ -15,6 +15,13 @@ RUN R -e 'withCallingHandlers(install.packages("remotes"), warning = function(w)
 RUN --mount=type=bind,source=docker/r/install.R,target=/tmp/install.R \
   Rscript /tmp/install.R
 
+RUN --mount=type=bind,source=src/gorilla,target=/tmp/gorilla \
+  && cd /tmp \
+  && R CMD build gorilla \
+  && R CMD INSTALL --no-docs --no-html --no-help --without-keep.source \
+       gorilla_0.0.0.9000.tar.gz \
+  && rm gorilla_0.0.0.9000.tar.gz
+
 RUN R -e 'remove.packages("remotes")'
 
 RUN mkdir -p /opt/gatk-sv-utils/scripts

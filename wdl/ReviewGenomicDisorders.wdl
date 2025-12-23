@@ -119,11 +119,11 @@ task VisualizeGenomicDisorders {
     awk '$1 == bid {print $2}' bid="${batch_id}" "${sample_table}" > samples.list
     cut -f2,5 "${pedigree}" > ploidy.tsv
 
-    Rscript /opt/gatk-sv-utils/scripts/visualize_gd.R \
+    Rscript /opt/gatk-sv-utils/scripts/call_gds.R \
       ${min_rd_deviation} \
       ${padding} \
       ${max_calls_per_sample} \
-      --violators "excess_calls_samples_${batch_id}.tsv" \
+      --outliers "excess_calls_samples_${batch_id}.tsv" \
       "${gd_regions}" \
       "${segdups}" \
       "${bincov}" \

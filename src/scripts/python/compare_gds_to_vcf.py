@@ -5,10 +5,8 @@ usage: compare_gds_to_vcf.py <tp_gds> <vcf> <matches> <mismatches>
 
 <gds>         Table of genomic disorders with carriers and non-carriers.
 <vcf>         VCF.
-<matches>     Variants in VCF for which all carriers match the
-              carriers of the GD.
-<mismatches>  Variant in VCF for which one or more carriers do
-              not match the carriers of the GD.
+<matches>     Where to write matches.
+<mismatches>  Where to write mismatches.
 
 The format of <gds> is a tab-delimited file with columns:
 chr
@@ -19,6 +17,8 @@ cluster ID
 SV type
 Manually validated carrriers (comma-separated)
 Manually validated non-carriers (comma-separated)
+
+The line should be a unique GD region.
 
 <matches> will contain the IDs of variants in the VCF that match a GD CNV and
 for which the set of the GD carriers is equal to the set of VCF variant
@@ -52,6 +52,7 @@ class SVType(Enum):
     INS = enum.auto()
     CTX = enum.auto()
     CPX = enum.auto()
+    CNV = enum.auto()
     INV = enum.auto()
     BND = enum.auto()
 
@@ -63,6 +64,9 @@ class SVType(Enum):
         if e is None:
             raise ValueError(f"{s} is not a valid SV type string")
         return e
+
+    def is_del_or_dup(self):
+        return self is SVType.DEL or self is SVType.DUP
 
     def __str__(self):
         return f"{self.name}"
@@ -78,25 +82,9 @@ class Interval:
     def start(self):
         return self._start
 
-    @start.setter
-    def start(self, value):
-        if not Interval._is_positive_int(value):
-            raise ValueError("start must be a positive integer")
-        Interval._assert_well_ordered(value, self._end)
-
-        self._start = value
-
     @property
     def end(self):
         return self._end
-
-    @end.setter
-    def end(self, value):
-        if not Interval._is_positive_int(value):
-            raise ValueError("end must be a positive integer")
-        Interval._assert_well_ordered(self._start, value)
-
-        self._end = value
 
     @staticmethod
     def _validate(start, end):
@@ -123,10 +111,8 @@ class Interval:
         return x and isinstance(x, int) and x > 0
 
 
-class CNV:
+class SV:
     def __init__(self, contig, interval, svtype):
-        if not CNV._is_valid_svtype(svtype):
-            raise ValueError("Only DEL and DUP are permitted")
         self.contig = contig
         self.interval = interval
         self.svtype = svtype
@@ -135,8 +121,20 @@ class CNV:
     def from_parts(cls, contig, start, end, svtype):
         return cls(contig, Interval(start, end), SVType.from_string(svtype))
 
+    def __str__(self):
+        return f"{self.contig}\t{self.interval}\t{self.svtype}"
+
     def matches(self, other, min_ovp=0.5):
-        if self.contig != other.contig or self.svtype is not other.svtype:
+        if self.contig != other.contig:
+            return False
+
+        if not self.svtype.is_del_or_dup():
+            return False
+
+        if not other.svtype.is_del_or_dup():
+            return False
+
+        if self.svtype is not other.svtype:
             return False
 
         ovp = self.interval.overlap(other.interval)
@@ -146,17 +144,10 @@ class CNV:
             and ovp / other.interval.size() >= min_ovp
         )
 
-    def __str__(self):
-        return f"{self.contig}\t{self.interval}\t{self.svtype}"
-
-    @staticmethod
-    def _is_valid_svtype(x):
-        return isinstance(x, SVType) and (x is SVType.DEL or x is SVType.DUP)
-
 
 class VCFRecord:
     def __init__(self, vr):
-        self.variant = CNV.from_parts(vr.contig, vr.pos, vr.stop, vr.info["SVTYPE"])
+        self.variant = SV.from_parts(vr.contig, vr.pos, vr.stop, vr.info["SVTYPE"])
         self.vid = vr.id
         self.carriers = set(VCFRecord._gt_to_carriers(vr.samples))
 
@@ -183,11 +174,14 @@ class GDRecord:
     def __init__(
         self, contig, start, end, gdid, clustid, svtype, carriers, non_carriers
     ):
-        self.variant = CNV.from_parts(contig, int(start), int(end), svtype)
+        self.variant = SV.from_parts(contig, int(start), int(end), svtype)
         self.gdid = gdid
-        self.clustid = None
+        self.clustid = None if len(clustid) == 0 else clustid
         self.carriers = set(carriers.split(","))
         self.non_carriers = set(non_carriers.split(","))
+
+        if len(self.carriers.intersection(self.non_carriers)) > 0:
+            raise ValueError("carriers and non carriers must be mutually execlusive")
 
 
 class GDTable:
@@ -203,9 +197,13 @@ class GDTable:
             for line in f:
                 fields = line.rstrip("\n").split("\t")
                 rec = GDRecord(*fields)
+                if not rec.variant.svtype.is_del_or_dup():
+                    raise ValueError("GD SV types must be 'DEL' or 'DUP'")
                 records.append(rec)
                 if rec.clustid is not None:
-                    clusters.get(rec.clustid, set()).update(rec.carriers)
+                    gds = clusters.get(rec.clustid, dict())
+                    gds[rec.gdid] = rec.carriers
+                    clusters[rec.clustid] = gds
         return cls(records, clusters)
 
     def iter_records(self):
@@ -224,45 +222,49 @@ class GDComparator:
             gdvar = gdrec.variant
             if not gdvar.contig in self.variantfile.index:
                 continue
-            for vfilerec in self.variantfile.fetch(
+            for vcfrec in self.variantfile.fetch(
                 gdvar.contig, gdvar.interval.start, gdvar.interval.end
             ):
                 if not (
-                    "PASS" in vfilerec.filter or "FAIL_MANUAL_REVIEW" in vfilerec.filter
+                    "PASS" in vcfrec.filter or "FAIL_MANUAL_REVIEW" in vcfrec.filter
                 ):
                     continue
-                try:
-                    vcfrec = VCFRecord(vfilerec)
-                except ValueError:
-                    # raised by CNV.__init__() so assume SV type is not CNV, which might not be the problem
-                    continue
-                if not vcfrec.overlaps_gd(gdrec, min_ovp):
+
+                if not vcfrec.variant.matches(gdvar, min_ovp):
                     continue
 
-                c1, c2, c3, c4 = GDComparator._get_sample_overlaps(
+                c1, c2, c3, c4, c5 = GDComparator._get_sample_overlaps(
                     vcfrec, gdrec, self.gdtable
                 )
-                yield (vcfrec, gdrec, c1, c2, c3, c4)
+                yield (vcfrec, gdrec, c1, c2, c3, c4, c5)
 
     @staticmethod
     def _get_sample_overlaps(vcfrec, gdrec, gdtable):
-        if gdrec.clustid is None:
-            cluster_carriers = set()
-        else:
-            # every cluster ID should have an entry
-            cluster_carriers = gdtable.clusters[gdrec.clustid]
-        # VCF carriers that are true GD carriers
+        # c1: VCF carriers that are true GD carriers
+        # c2: VCF carriers that are true GD non-carriers for this GD, but a
+        #     carrier for a different GD in the same cluster
+        # c3: VCF carriers that are true GD non-carriers for this GD and not a
+        #     carrier for a different GD in the same cluster
+        # c4: VCF carriers that are not true GD carriers nor true GD
+        #     non-carriers, but a carrier for a different GD in the same cluster
+        # c5: VCF carriers that are none of the above
         c1 = vcfrec.carriers & gdrec.carriers
-        # VCF carriers that are true GD non-carriers for this GD, but a carrier
-        # for a different GD in the same cluster
-        c2 = vcfrec.carriers & gdrec.non_carriers & cluster_carriers
-        # VCF carriers that are true GD non-carriers for this GD and not a
-        # carrier for a different GD in the same cluster
-        c3 = (vcfrec.carriers & gdrec.non_carriers) - cluster_carriers
-        # VCF carriers that are not otherwise classified
-        c4 = vcfrec.carriers - c1 - c2 - c3
 
-        return (c1, c2, c3, c4)
+        if gdrec.clustid is None:
+            c2 = set()
+            c3 = vcfrec.carriers & gdrec.non_carriers
+            c4 = set()
+            c5 = vcfrec.carriers - c1 - c3
+        else:
+            cluster = gdtable.clusters[gdrec.clustid]
+            other_carriers = [v for k, v in cluster.items() if k != gdrec.gdid]
+            other_carriers = set().union(*other_carriers)
+            c2 = vcfrec.carriers & gdrec.non_carriers & other_carriers
+            c3 = vcfrec.carriers & gdrec.non_carriers - other_carriers
+            c4 = vcfrec.carriers - gdrec.carriers - gdrec.non_carriers & other_carriers
+            c5 = vcfrec - c1 - c2 - c3 - c4
+
+        return (c1, c2, c3, c4, c5)
 
 
 def compare(gds, vcf, matches, mismatches):
@@ -273,17 +275,17 @@ def compare(gds, vcf, matches, mismatches):
         open(matches, mode="w", encoding="utf-8") as f,
         open(mismatches, mode="w", encoding="utf-8") as g,
     ):
-        for vcfrec, gdrec, c1, c2, c3, c4 in gdc.get_matches(0.5):
-            if len(c3) == 0 and len(c4) == 0:
+        for vcfrec, gdrec, c1, c2, c3, c4, c5 in gdc.get_matches(0.5):
+            if len(c1) == 0 and len(c2) == 0 and len(c4) == 0:
                 rm_vids.add(vcfrec.vid)
             else:
                 other_vids.add(vcfrec.vid)
                 g.write(
-                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{','.join(c1)}\t{','.join(c2)}\t{','.join(c3)}\t{','.join(c4)}\n"
+                    f"{vcfrec.vid}\t{vcfrec.variant}\t{gdrec.gdid}\t{','.join(c1)}\t{','.join(c2)}\t{','.join(c3)}\t{','.join(c4)}\t{','.join(c5)}\n"
                 )
         # only want to remove VCF variants that would not otherwise be modified
         rm_vids.difference_update(other_vids)
-        f.writelines(rm_vids)
+        f.writelines([f"{vid}\n" for vid in rm_vids])
 
 
 def main():

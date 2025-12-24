@@ -3,18 +3,8 @@
 #' A convenience function to run the genomic disorder calling workflow on a set
 #' of inputs.
 #'
-#' @param gds_path Path to the genomic disorders table file. The format is a
-#'   tab-delimited file with the following columns:
-#'   1. chr: contig of the region
-#'   2. start_GRCh38: start of the region
-#'   3. end_GRCh38: end of the region
-#'   4. GD_ID: ID of the region
-#'   5. svtype: either 'DEL' or 'DUP'
-#'   6. NAHR: either 'yes' or 'no' indicating NAHR-mediated or not
-#'   7. terminal: one of 'p', 'q', or 'no' indicating the p-arm, q-arm, or
-#'      non-terminal region
-#'   8. cluster: either a cluster ID or an empty string
-#'   The file must have column headers as given.
+#' @param gds_path Path to the genomic disorders table file. See
+#'   [`read_gdtable`][read_gdtable()]
 #' @param sds_path Path to a BEDX file of hg38 segmental duplication regions.
 #' @param bincov_path Path to the binned coverage matrix.
 #' @param medians_path Path to the median coverages file.

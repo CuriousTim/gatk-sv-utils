@@ -19,20 +19,8 @@ forage(
 )
 }
 \arguments{
-\item{gds_path}{Path to the genomic disorders table file. The format is a
-tab-delimited file with the following columns:
-\enumerate{
-\item chr: contig of the region
-\item start_GRCh38: start of the region
-\item end_GRCh38: end of the region
-\item GD_ID: ID of the region
-\item svtype: either 'DEL' or 'DUP'
-\item NAHR: either 'yes' or 'no' indicating NAHR-mediated or not
-\item terminal: one of 'p', 'q', or 'no' indicating the p-arm, q-arm, or
-non-terminal region
-\item cluster: either a cluster ID or an empty string
-The file must have column headers as given.
-}}
+\item{gds_path}{Path to the genomic disorders table file. See
+\code{\link[=read_gdtable]{read_gdtable}}}
 
 \item{sds_path}{Path to a BEDX file of hg38 segmental duplication regions.}
 

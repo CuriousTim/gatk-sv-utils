@@ -1,10 +1,11 @@
 #' Read a BEDX file with segmental duplication regions.
 #'
 #' The first three columns must be contig, start, and end in 0-start, open-end
-#' coordinates.
+#' coordinates. Only the hg38 primary chromosomes are kept.
 #'
 #' @param path Path to the file.
 #' @returns A `GRanges` object.
+#' @export
 read_segdups <- function(path) {
     V1 <- NULL
     V2 <- NULL

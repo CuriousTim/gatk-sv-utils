@@ -14,5 +14,5 @@ A \code{GRanges} object.
 }
 \description{
 The first three columns must be contig, start, and end in 0-start, open-end
-coordinates.
+coordinates. Only the hg38 primary chromosomes are kept.
 }

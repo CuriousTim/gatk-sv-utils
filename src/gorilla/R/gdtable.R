@@ -9,24 +9,25 @@ GDTABLE_REQ_HEADER <- c(
     "cluster"
 )
 
-# Add a `qstart` and `qend` columns to the `data.table` with the new
-# coordinates of the regions after expanding. Modification is in place.
-expand_gdtable <- function(x, prop) {
-    start_GRCh38 <- NULL
-    end_GRCh38 <- NULL
-
-    pad_size <- ceiling((x$end_GRCh38 - x$start_GRCh38 + 1L) * prop)
-    x[,
-        c("qstart", "qend") := list(
-            pmax(1L, start_GRCh38 - pad_size),
-            pmin(TABIX_MAX_SEQLEN, end_GRCh38 + pad_size)
-        )
-    ]
-
-    invisible(x)
-}
-
-# Read the genomic disorders table file.
+#' Read genomic disorders table file.
+#'
+#' Reads a TSV file describing genomic disorder regions.
+#'
+#' The file must have the following columns:
+#' 1. chr: contig of the region
+#' 2. start_GRCh38: start of the region
+#' 3. end_GRCh38: end of the region
+#' 4. GD_ID: ID of the region
+#' 5. svtype: either 'DEL' or 'DUP'
+#' 6. NAHR: either 'yes' or 'no' indicating NAHR-mediated or not
+#' 7. terminal: one of 'p', 'q', or 'no' indicating the p-arm, q-arm, or
+#'    non-terminal region
+#' 8. cluster: either a cluster ID or an empty string
+#' The file must have column headers as given.
+#'
+#' @param path Path to the file.
+#' @returns A `data.table`.
+#' @export
 read_gdtable <- function(path) {
     tmp <- data.table::fread(
         path,
@@ -64,4 +65,31 @@ read_gdtable <- function(path) {
     tmp[, NAHR := NAHR == "yes"]
 
     tmp
+}
+
+#' Expand genomic disorder regions.
+#'
+#' Expand each genomic disorder region by some fraction of its size.
+#'
+#' The start of the expanded region will not be less than 1 and the end of the
+#' region will not be greater than 5536870912.
+#'
+#' @param x A `data.table` produced by [`read_gdtable`][read_gdtable()].
+#' @param prop The fraction of each region by which to expand it.
+#' @returns A `data.table` with columns `qstart` and `qend` with the expanded
+#'   start and end.
+#' @export
+expand_gdtable <- function(x, prop) {
+    start_GRCh38 <- NULL
+    end_GRCh38 <- NULL
+
+    pad_size <- ceiling((x$end_GRCh38 - x$start_GRCh38 + 1L) * prop)
+    x[,
+        c("qstart", "qend") := list(
+            pmax(1L, start_GRCh38 - pad_size),
+            pmin(TABIX_MAX_SEQLEN, end_GRCh38 + pad_size)
+        )
+    ]
+
+    invisible(x)
 }

@@ -128,12 +128,6 @@ class SV:
         if self.contig != other.contig:
             return False
 
-        if not self.svtype.is_del_or_dup():
-            return False
-
-        if not other.svtype.is_del_or_dup():
-            return False
-
         if self.svtype is not other.svtype:
             return False
 
@@ -175,6 +169,8 @@ class GDRecord:
         self, contig, start, end, gdid, clustid, svtype, carriers, non_carriers
     ):
         self.variant = SV.from_parts(contig, int(start), int(end), svtype)
+        if not self.variant.svtype.is_del_or_dup():
+            raise ValueError("GD SV types must be 'DEL' or 'DUP'")
         self.gdid = gdid
         self.clustid = None if len(clustid) == 0 else clustid
         self.carriers = set(carriers.split(","))
@@ -197,8 +193,6 @@ class GDTable:
             for line in f:
                 fields = line.rstrip("\n").split("\t")
                 rec = GDRecord(*fields)
-                if not rec.variant.svtype.is_del_or_dup():
-                    raise ValueError("GD SV types must be 'DEL' or 'DUP'")
                 records.append(rec)
                 if rec.clustid is not None:
                     gds = clusters.get(rec.clustid, dict())
@@ -222,14 +216,15 @@ class GDComparator:
             gdvar = gdrec.variant
             if not gdvar.contig in self.variantfile.index:
                 continue
-            for vcfrec in self.variantfile.fetch(
+            for rec in self.variantfile.fetch(
                 gdvar.contig, gdvar.interval.start, gdvar.interval.end
             ):
                 if not (
-                    "PASS" in vcfrec.filter or "FAIL_MANUAL_REVIEW" in vcfrec.filter
+                    "PASS" in rec.filter or "FAIL_MANUAL_REVIEW" in rec.filter
                 ):
                     continue
 
+                vcfrec = VCFRecord(rec)
                 if not vcfrec.variant.matches(gdvar, min_ovp):
                     continue
 
@@ -276,7 +271,7 @@ def compare(gds, vcf, matches, mismatches):
         open(mismatches, mode="w", encoding="utf-8") as g,
     ):
         for vcfrec, gdrec, c1, c2, c3, c4, c5 in gdc.get_matches(0.5):
-            if len(c1) == 0 and len(c2) == 0 and len(c4) == 0:
+            if len(c3) == 0 and len(c5) == 0:
                 rm_vids.add(vcfrec.vid)
             else:
                 other_vids.add(vcfrec.vid)

@@ -62,6 +62,8 @@ workflow MakeGDRevisionTable {
         bincov_matrix = MakeMaps.bincov_matrix_map[batch_id],
         bincov_matrix_index = MakeMaps.bincov_matrix_index_map[batch_id],
         medians_file = MakeMaps.medians_map[batch_id],
+        segdups = segdups,
+        batch_id = batch_id,
         r_docker = r_docker
     }
   }

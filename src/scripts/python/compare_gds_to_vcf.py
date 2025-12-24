@@ -34,8 +34,13 @@ VCF end
 SV type
 GD ID
 VCF carriers that are manually reviewed GD carriers (comma-separated)
-VCF carriers that are manually reviewed non-GD carriers (comma-separated)
-VCF carriers that are not in the previous two categories (comma-separated)
+VCF carriers that are manually reviewed non-GD carriers, but a carrier for a
+    different GD in the same cluster (comma-separated)
+VCF carriers that are manually reviewed non-GD carriers and not a carrier for a
+    different GD in the same cluster (comma-separated)
+VCF carriers that are not manually reviewed GD carriers nor non-GD carriers,
+    but a carrier for a different GD in the same cluster (comma-separated)
+VCF carriers that are not in the previous categories (comma-separated)
 """
 
 import sys
@@ -257,7 +262,7 @@ class GDComparator:
             c2 = vcfrec.carriers & gdrec.non_carriers & other_carriers
             c3 = vcfrec.carriers & gdrec.non_carriers - other_carriers
             c4 = vcfrec.carriers - gdrec.carriers - gdrec.non_carriers & other_carriers
-            c5 = vcfrec - c1 - c2 - c3 - c4
+            c5 = vcfrec.carriers - c1 - c2 - c3 - c4
 
         return (c1, c2, c3, c4, c5)
 

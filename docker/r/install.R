@@ -30,7 +30,7 @@ cran_pkgs <- c("data.table@1.17.8",
                "matrixStats@1.5.0") |>
   parse_pkgs()
 bioc_pkgs <- c("Rsamtools@2.26.0",
-               "GenomicRanges@1.63.0",
+               "GenomicRanges@1.62.1",
 	       "rtracklayer@1.70.0") |>
   parse_pkgs()
 

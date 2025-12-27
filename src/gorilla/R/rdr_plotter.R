@@ -9,6 +9,8 @@ BIN_PLOT_FRACTION <- 0.05
 # maximum number of background samples to plot
 MAX_BACKGROUND <- 200L
 
+GENE_LANES <- 4
+
 #' Create a new `rdr_plotter` object.
 #'
 #' An `rdr_plotter` object represents a region of a binned coverage matrix to
@@ -39,10 +41,15 @@ new_rdr_plotter <- function(x, segdups) {
     bg_samples <- sample(colnames(mat$rd), min(MAX_BACKGROUND, ncol(mat$rd)))
     span <- utils::head(mat$ranges, 1)
     GenomicRanges::end(span) <- utils::tail(GenomicRanges::end(mat$ranges), 1)
-    ovp_sd <- segdups[S4Vectors::queryHits(GenomicRanges::findOverlaps(
-        segdups,
-        span
+    ovp_sd <- segdups[S4Vectors::subjectHits(GenomicRanges::findOverlaps(
+        span,
+        segdups
     ))]
+    ovp_genes <- genes_gr[S4Vectors::subjectHits(GenomicRanges::findOverlaps(
+        span,
+        genes_gr
+    ))]
+    ovp_genes <- split_gene_table(ovp_genes)
 
     structure(
         list(
@@ -50,7 +57,8 @@ new_rdr_plotter <- function(x, segdups) {
             bins_to_plot = bins_to_plot,
             bin_mids = bin_mids,
             bg_samples = bg_samples,
-            segdups = ovp_sd
+            segdups = ovp_sd,
+            genes = ovp_genes
         ),
         class = "rdr_plotter"
     )
@@ -85,15 +93,15 @@ validate_rdr_plotter <- function(x) {
 #' @export
 plot.rdr_plotter <- function(x, y = NULL, main = NULL, carrier = NULL, ...) {
     old_par <- graphics::par(no.readonly = TRUE)
-    graphics::par(mar = c(3.1, 4.1, 4.1, 2.1))
+    on.exit(graphics::par(old_par), add = TRUE)
     rdr_plotter_plot_base(x, main)
     rdr_plotter_plot_bg(x)
     rdr_plotter_plot_carriers(x, carrier)
-    rdr_plotter_plot_segdups(x)
     rdr_plotter_plot_pad(x)
-    rdr_plotter_plot_axis(x)
     rdr_plotter_plot_border(x)
-    graphics::par(old_par)
+    rdr_plotter_plot_genes(x)
+    rdr_plotter_plot_segdups(x)
+    rdr_plotter_plot_axis(x)
 }
 
 #' Create a new `gdplotter` object.
@@ -183,6 +191,8 @@ rdr_plotter_set_pad <- function(x, left = NULL, right = NULL) {
 }
 
 rdr_plotter_plot_base <- function(x, main = NULL) {
+    graphics::layout(matrix(1:3, nrow = 3), width = 1, height = c(8, 2, 1))
+    graphics::par(mar = c(0, 4.1, 4.1, 2.1))
     plot(
         NULL,
         main = main,
@@ -207,15 +217,50 @@ rdr_plotter_plot_bg <- function(x) {
 }
 
 rdr_plotter_plot_segdups <- function(x) {
+    graphics::par(mar = c(3.1, 4.1, 0, 2.1))
+    plot(
+        NULL,
+        xlim = range(x$bin_mids),
+        ylim = c(0, 1),
+        xaxs = "i",
+        xaxt = "n",
+        yaxt = "n",
+        xlab = "",
+        ylab = ""
+    )
     if (length(x$segdups) > 0) {
         graphics::rect(
             GenomicRanges::start(x$segdups),
             0.1,
             GenomicRanges::end(x$segdups),
-            0.2,
+            0.9,
             col = "brown4",
             border = NA
         )
+    }
+}
+
+rdr_plotter_plot_genes <- function(x) {
+    graphics::par(mar = c(0, 4.1, 0, 2.1))
+    plot(
+        NULL,
+        xlim = range(x$bin_mids),
+        ylim = c(-1, GENE_LANES),
+        xaxs = "i",
+        xaxt = "n",
+        yaxs = "i",
+        yaxt = "n",
+        xlab = "",
+        ylab = ""
+    )
+    if (length(x$genes) == 0) {
+        return()
+    }
+
+    lane <- 0
+    for (i in seq_along(x$genes)) {
+        plot_gene(x$genes[[i]], lane)
+        lane <- (lane + 1) %% GENE_LANES
     }
 }
 
@@ -286,13 +331,44 @@ rdr_plotter_plot_axis <- function(x) {
     )
     graphics::mtext(xlabs, 1, at = xticks, adj = 1.05, cex = 0.6)
     graphics::title(
-        xlab = sprintf("%s Position (bp)", x$gdcaller$gd$chr),
+        xlab = sprintf(
+            "%s Position (bp)",
+            as.character(GenomicRanges::seqnames(x$bincov_mat$ranges[1]))
+        ),
         line = 2
     )
 }
 
 rdr_plotter_plot_border <- function(x) {
     graphics::box(lwd = 2)
+}
+
+plot_gene <- function(x, lane) {
+    lane <- lane + 0.2
+    graphics::lines(
+        c(x[1, ]$gene_start, x[1, ]$gene_end),
+        c(lane, lane),
+        col = x[1, ]$color
+    )
+    graphics::rect(
+        x$block_starts,
+        ifelse(x$thick, lane - 0.3, lane - 0.2),
+        x$block_ends,
+        ifelse(x$thick, lane + 0.3, lane + 0.2),
+        col = x$color,
+        border = NA
+    )
+
+    # don't print ENSG gene names to save plot space
+    if (!grepl("^ENSG[0-9]+", x[1, ]$gene_name)) {
+        graphics::text(
+            x[1, ]$gene_end,
+            lane - 0.45,
+            labels = x[1, ]$gene_name,
+            adj = c(1, 0.5),
+            cex = 0.8
+        )
+    }
 }
 
 # Generate a vector of best-effort equally spaced integers from 1 to n.
@@ -332,4 +408,90 @@ format_sample_id <- function(x) {
     } else {
         x
     }
+}
+
+split_gene_table <- function(x) {
+    if (length(x) == 0) {
+        return(list())
+    }
+
+    mapply(
+        split_gene_blocks,
+        as.character(GenomicRanges::seqnames(x)),
+        S4Vectors::start(x),
+        S4Vectors::end(x),
+        S4Vectors::mcols(x)$thickStart,
+        S4Vectors::mcols(x)$thickEnd,
+        S4Vectors::mcols(x)$chromStarts,
+        S4Vectors::mcols(x)$blockSizes,
+        S4Vectors::mcols(x)$geneName,
+        S4Vectors::mcols(x)$color,
+        SIMPLIFY = FALSE,
+        USE.NAMES = FALSE
+    )
+}
+
+split_gene_blocks <- function(
+    chrom,
+    chrom_start,
+    chrom_end,
+    thick_start,
+    thick_end,
+    offsets,
+    blocks,
+    gene_name,
+    color
+) {
+    offsets <- as.integer(strsplit(
+        sub(",$", "", offsets),
+        split = ",",
+        fixed = TRUE
+    )[[1]])
+    blocks <- as.integer(strsplit(
+        sub(",$", "", blocks),
+        split = ",",
+        fixed = TRUE
+    )[[1]])
+    starts <- chrom_start + offsets
+    ends <- starts + blocks - 1
+    if (thick_start <= thick_end) {
+        i <- utils::tail(which(starts <= thick_start), 1)
+        j <- utils::tail(which(starts <= thick_end), 1)
+        starts <- c(
+            if (i > 1) starts[1:(i - 1)] else integer(),
+            if (starts[[i]] < thick_start) starts[[i]] else integer(),
+            thick_start,
+            if (j > i) starts[(i + 1):j] else integer(),
+            if (thick_end < ends[[j]]) thick_end + 1 else integer(),
+            if (j < length(starts)) {
+                starts[(j + 1):length(starts)]
+            } else {
+                integer()
+            }
+        )
+        ends <- c(
+            if (i > 1) ends[1:(i - 1)] else integer(),
+            if (starts[[i]] < thick_start) thick_start - 1 else integer(),
+            if (i == j) thick_end else ends[[i]],
+            if (j > i + 1) ends[(i + 1):(j - 1)] else integer(),
+            if (j > i) thick_end else integer(),
+            if (thick_end < ends[[j]]) ends[[j]] else integer(),
+            if (j < length(ends)) ends[(j + 1):length(ends)] else integer()
+        )
+        thick <- rep(FALSE, length(starts))
+        thick[starts >= thick_start & ends <= thick_end] <- TRUE
+    } else {
+        thick <- rep(FALSE, length(starts))
+    }
+
+    data.table(
+        chr = chrom,
+        gene_start = chrom_start,
+        gene_end = chrom_end,
+        block_starts = starts,
+        block_ends = ends,
+        thick = thick,
+        gene_name = gene_name,
+        color = color
+    )
 }

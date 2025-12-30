@@ -223,7 +223,7 @@ task MergeVCFChecks {
     cat "${missing}" | xargs cat > "${output_prefix}-gd_missing.tsv"
 
     mkdir batches_to_plot
-    cut -f1,5,10 "${output_prefix}-gd_missing.tsv" \
+    cut -f1,6,11 "${output_prefix}-gd_missing.tsv" \
       | gawk -F'\t' 'NR==FNR{a[$2]=$1} NR>FNR{split($3, b, /,/); for (i in b) {if (b[i] in a) {print ($1"\t"$2"\t"b[i]) > ("batches_to_plot/" a[b[i]])}}}' "${sample_table}" -
   >>>
 }

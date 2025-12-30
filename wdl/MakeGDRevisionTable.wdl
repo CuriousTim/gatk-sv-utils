@@ -230,7 +230,7 @@ task MergeVCFChecks {
 
 task MakePlots {
   input {
-    File batch_id
+    String batch_id
     File manifest
     File segdups
     File gd_regions

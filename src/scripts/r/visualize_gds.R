@@ -55,7 +55,7 @@ for (i in seq_len(nrow(goodies))) {
         plot_name <- sprintf("%s~~%s~~%s.jpg", gd$vid, gd$GD_ID, carriers[[j]])
         plot_path <- file.path(argv[[6]], plot_name)
         jpeg(plot_path, res = 100, width = 960, height = 540)
-        plot(plotter, carrier = i)
+        plot(plotter, carrier = j)
         dev.off()
     }
 }

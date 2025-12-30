@@ -297,12 +297,12 @@ task MergePlotTars {
     File plots = "${tar_prefix}.tar"
   }
 
-  Int disk_size = size(plot_tars, "GB") * 2 + 50
+  Float disk_size = size(plot_tars, "GB") * 2 + 50
 
   runtime {
     bootDiskSizeGb: 8
     cpu: 1
-    disks: "local-disk ${disk_size} SSD"
+    disks: "local-disk ${ceil(disk_size)} SSD"
     docker: base_docker
     maxRetries: 1
     memory: "2 GiB"

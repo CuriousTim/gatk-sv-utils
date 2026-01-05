@@ -9,7 +9,7 @@ BIN_PLOT_FRACTION <- 0.05
 # maximum number of background samples to plot
 MAX_BACKGROUND <- 200L
 
-GENE_LANES <- 4
+GENE_LANES <- 16
 
 #' Create a new `rdr_plotter` object.
 #'
@@ -191,7 +191,7 @@ rdr_plotter_set_pad <- function(x, left = NULL, right = NULL) {
 }
 
 rdr_plotter_plot_base <- function(x, main = NULL) {
-    graphics::layout(matrix(1:3, nrow = 3), width = 1, height = c(8, 2, 1))
+    graphics::layout(matrix(1:3, nrow = 3), width = 1, height = c(6, 4, 1.5))
     graphics::par(mar = c(0, 4.1, 4.1, 2.1))
     plot(
         NULL,
@@ -257,10 +257,24 @@ rdr_plotter_plot_genes <- function(x) {
         return()
     }
 
-    lane <- 0
-    for (i in seq_along(x$genes)) {
-        plot_gene(x$genes[[i]], lane)
-        lane <- (lane + 1) %% GENE_LANES
+    lane_ends <- integer(GENE_LANES)
+    lane <- 1
+    lane_ends[[lane]] <- x$genes[[1]][1, ]$gene_end
+    plot_gene(x$genes[[1]], lane)
+    for (i in seq.int(2, length(x$genes))) {
+        gene <- x$genes[[i]]
+        gene_name_width <- graphics::strwidth(gene[1, ]$gene_name, cex = 0.8)
+        display_start <- gene[1, ]$gene_start - gene_name_width * 1.1
+        lane <- -1
+        for (j in seq_along(lane_ends)) {
+            if (display_start > lane_ends[[j]]) {
+                lane <- j
+                break
+            }
+        }
+        lane <- if (lane == -1) 1 else lane
+        lane_ends[[lane]] <- max(lane_ends[[lane]], gene[1, ]$gene_end)
+        plot_gene(gene, lane)
     }
 }
 
@@ -344,7 +358,7 @@ rdr_plotter_plot_border <- function(x) {
 }
 
 plot_gene <- function(x, lane) {
-    lane <- lane + 0.2
+    lane <- lane - 1
     graphics::lines(
         c(x[1, ]$gene_start, x[1, ]$gene_end),
         c(lane, lane),
@@ -352,9 +366,9 @@ plot_gene <- function(x, lane) {
     )
     graphics::rect(
         x$block_starts,
-        ifelse(x$thick, lane - 0.3, lane - 0.2),
+        ifelse(x$thick, lane - 0.4, lane - 0.3),
         x$block_ends,
-        ifelse(x$thick, lane + 0.3, lane + 0.2),
+        ifelse(x$thick, lane + 0.4, lane + 0.3),
         col = x$color,
         border = NA
     )
@@ -362,10 +376,11 @@ plot_gene <- function(x, lane) {
     # don't print ENSG gene names to save plot space
     if (!grepl("^ENSG[0-9]+", x[1, ]$gene_name)) {
         graphics::text(
-            x[1, ]$gene_end,
-            lane - 0.45,
+            x[1, ]$gene_start,
+            lane,
             labels = x[1, ]$gene_name,
-            adj = c(1, 0.5),
+            pos = 2,
+            offset = 0.1,
             cex = 0.8
         )
     }

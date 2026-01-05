@@ -6,12 +6,10 @@ library(UCSC.utils)
 genes <- fetch_UCSC_track_data("hg38", "knownGene")
 genes <- as.data.table(genes)
 genes <- genes[chrom %in% paste0("chr", c(1:22, "X", "Y")), ]
-# only keep genes in the basic set
-genes <- genes[grepl("\\<basic\\>", tier), ]
+genes <- genes[grepl("\\<MANE_(Select|Plus_Clinical)\\>", tag), ]
 # pick highest rank transcript for each gene
 genes <- genes[, .SD[which.min(rank)], by = "geneName"]
-genes[, color := fcase(transcriptClass == "pseudo", "#ff33ff",
-                       transcriptClass == "nonCoding", "#006400",
+genes[, color := fcase(transcriptClass == "nonCoding", "#006400",
                        transcriptClass == "coding", "#0c0c78")]
 setkey(genes, chrom, chromStart)
 

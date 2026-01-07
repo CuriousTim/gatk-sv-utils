@@ -99,8 +99,8 @@ plot.rdr_plotter <- function(x, y = NULL, main = NULL, carrier = NULL, ...) {
     rdr_plotter_plot_carriers(x, carrier)
     rdr_plotter_plot_pad(x)
     rdr_plotter_plot_border(x)
-    rdr_plotter_plot_genes(x)
     rdr_plotter_plot_segdups(x)
+    rdr_plotter_plot_genes(x)
     rdr_plotter_plot_axis(x)
 }
 
@@ -191,7 +191,7 @@ rdr_plotter_set_pad <- function(x, left = NULL, right = NULL) {
 }
 
 rdr_plotter_plot_base <- function(x, main = NULL) {
-    graphics::layout(matrix(1:3, nrow = 3), width = 1, height = c(6, 4, 1.5))
+    graphics::layout(matrix(1:3, nrow = 3), width = 1, height = c(6, 1.5, 4))
     graphics::par(mar = c(0, 4.1, 4.1, 2.1))
     plot(
         NULL,
@@ -217,7 +217,7 @@ rdr_plotter_plot_bg <- function(x) {
 }
 
 rdr_plotter_plot_segdups <- function(x) {
-    graphics::par(mar = c(3.1, 4.1, 0, 2.1))
+    graphics::par(mar = c(0, 4.1, 0, 2.1))
     plot(
         NULL,
         xlim = range(x$bin_mids),
@@ -241,7 +241,7 @@ rdr_plotter_plot_segdups <- function(x) {
 }
 
 rdr_plotter_plot_genes <- function(x) {
-    graphics::par(mar = c(0, 4.1, 0, 2.1))
+    graphics::par(mar = c(3.1, 4.1, 0, 2.1))
     plot(
         NULL,
         xlim = range(x$bin_mids),

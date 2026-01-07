@@ -29,6 +29,7 @@ there is discordance between the VCF variant carriers and the GD CNV
 carriers.
 The format of <mismatches> is a tab-delimited file with columns:
 VCF ID
+VCF contig
 VCF start
 VCF end
 SV type

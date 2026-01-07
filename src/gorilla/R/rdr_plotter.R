@@ -258,21 +258,22 @@ rdr_plotter_plot_genes <- function(x) {
     }
 
     lane_ends <- integer(GENE_LANES)
-    lane <- 1
+    lane <- GENE_LANES
     lane_ends[[lane]] <- x$genes[[1]][1, ]$gene_end
     plot_gene(x$genes[[1]], lane)
     for (i in seq.int(2, length(x$genes))) {
         gene <- x$genes[[i]]
         gene_name_width <- graphics::strwidth(gene[1, ]$gene_name, cex = 0.8)
         display_start <- gene[1, ]$gene_start - gene_name_width * 1.1
-        lane <- -1
-        for (j in seq_along(lane_ends)) {
+        lane <- 0
+        for (j in seq.int(GENE_LANES, 1)) {
             if (display_start > lane_ends[[j]]) {
                 lane <- j
                 break
             }
         }
-        lane <- if (lane == -1) 1 else lane
+        # maybe the gene should be plotted at bottom if it would overlap
+        lane <- if (lane == 0) GENE_LANES else lane
         lane_ends[[lane]] <- max(lane_ends[[lane]], gene[1, ]$gene_end)
         plot_gene(gene, lane)
     }

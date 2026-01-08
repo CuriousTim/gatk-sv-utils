@@ -191,7 +191,7 @@ rdr_plotter_set_pad <- function(x, left = NULL, right = NULL) {
 }
 
 rdr_plotter_plot_base <- function(x, main = NULL) {
-    graphics::layout(matrix(1:3, nrow = 3), width = 1, height = c(6, 1.5, 4))
+    graphics::layout(matrix(1:3, nrow = 3), width = 1, heights = c(6, 0.5, 4))
     graphics::par(mar = c(0, 4.1, 4.1, 2.1))
     plot(
         NULL,

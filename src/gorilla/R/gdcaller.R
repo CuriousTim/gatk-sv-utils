@@ -21,7 +21,7 @@
 
 # the fraction of the region to use as the window size for non-NAHR GDs
 NON_NAHR_WINDOW_PROP <- 0.01
-# the minimum number of windows to use as the window size for non-NAHR GDs
+# the minimum number of bins to use as the window size for non-NAHR GDs
 NON_NAHR_WINDOW_MIN_BINS <- 101
 # the fraction of terminal non-NAHR regions that should be used as the window
 # size

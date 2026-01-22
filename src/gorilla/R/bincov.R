@@ -16,25 +16,6 @@ print.bincov_file <- function(x, ...) {
     cat("samples: ", length(x$header) - 3, "\n", sep = "")
 }
 
-#' Query an object with a genomic region.
-#'
-#' `query()` retrieves some genomic region from `x`.
-#'
-#' The method for [`bincov_file`][bincov_file()] retrieves all the bins
-#' overlapping the requested region from the binned coverage matrix and returns
-#' a `bincov_mat` object or `NULL` if the matrix does not have any overlappng
-#' bins.
-#'
-#' @param x An object.
-#' @param contig The contig containing the region.
-#' @param start The start of the region (1-start).
-#' @param end The end of the region (inclusive).
-#' @returns An object representing the queried region.
-#' @export
-query <- function(x, contig, start, end) {
-    UseMethod("query")
-}
-
 #' @rdname query
 #' @export
 query.bincov_file <- function(x, contig, start, end) {
@@ -111,8 +92,14 @@ normalize_bincov <- function(x, medians) {
 
 #' @export
 `[.bincov_mat` <- function(x, i, j, ..., drop = FALSE) {
-    x$ranges <- x$ranges[i]
-    x$rd <- x$rd[i, j, drop = drop]
+    if (!missing(j)) {
+        x$rd <- x$rd[, j, drop = drop]
+    }
+
+    if (!missing(i)) {
+        x$ranges <- x$ranges[i]
+        x$rd <- x$rd[i, , drop = drop]
+    }
 
     x
 }

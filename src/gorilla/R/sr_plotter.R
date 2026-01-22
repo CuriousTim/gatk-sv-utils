@@ -72,7 +72,7 @@ draw_sample_sr <- function(x, y, color) {
     if (nrow(left_clip) > 0) {
         graphics::points(
             x = left_clip$pos,
-            y = rep(y, nrow(left_clip)),
+            y = rep(y - 1, nrow(left_clip)),
             col = paste0(color, left_clip$alpha),
             pch = "\\",
         )
@@ -81,7 +81,7 @@ draw_sample_sr <- function(x, y, color) {
     if (nrow(right_clip) > 0) {
         graphics::points(
             x = right_clip$pos,
-            y = rep(y - 1, nrow(right_clip)),
+            y = rep(y, nrow(right_clip)),
             col = paste0(color, right_clip$alpha),
             pch = "/"
         )

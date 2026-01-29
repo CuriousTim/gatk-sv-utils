@@ -448,6 +448,12 @@ task CountConcordance {
     bcftools query --include 'ID=@start_vcf_vids & GT="alt"' \
       --format '%ID[\t%SAMPLE]\n' "${start_vcf}" > 'start.tsv'
 
+    : > eval_vs_truth.tsv
+    : > truth_vs_eval.tsv
+    : > false_positives.tsv
+    : > false_negatives-type1.tsv
+    : > false_negatives-type2.tsv
+
     gawk -f /opt/gatk-sv-utils/scripts/benchmark_denovo.awk \
       'eval.tsv' 'truth_in_start.tsv' 'truth.tsv' 'start.tsv'
 

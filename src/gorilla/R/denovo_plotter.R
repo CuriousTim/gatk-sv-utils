@@ -1,57 +1,74 @@
 # colors for child, father, mother
 TRIO_COLORS <- c("#bc5d41", "#84a955", "#965da7")
 
-#' Create a new `denovo_plotter` object.
+#' Create a new `denovo_plotter` object
 #'
 #' A `denovo_plotter` can create a visualization of de novo SV evidence for a
 #' child, father, mother trio.
 #'
+#' The plot will display evidence from discordant read pairs, split reads and
+#' read depth, along with some annotations.
+#'
 #' @param x A [`svtrio`] object.
 #' @returns A `denovo_plotter` object.
 #' @export
+#' @examples
+#' pe_path <- system.file(
+#'     "extdata",
+#'     "example.PE.txt.gz",
+#'     package = "gorilla",
+#'     mustWork = TRUE
+#' )
+#' sr_path <- system.file(
+#'     "extdata",
+#'     "example.SR.txt.gz",
+#'     package = "gorilla",
+#'     mustWork = TRUE
+#' )
+#' rd_path <- system.file(
+#'     "extdata",
+#'     "example.RD.txt.gz",
+#'     package = "gorilla",
+#'     mustWork = TRUE
+#' )
+#' medians_path <- system.file(
+#'     "extdata",
+#'     "example_medianCov.txt",
+#'     package = "gorilla",
+#'     mustWork = TRUE
+#' )
+#'
+#' pe <- pe_file(pe_path)
+#' sr <- sr_file(sr_path)
+#' rd_medians <- read_median_coverages(medians_path)
+#' rd <- rd_file(rd_path, rd_medians)
+#'
+#' sv <- svevidence("chr16", 28743149, 28745149, pe, sr, rd, "DUP")
+#' trio <- svtrio(sv, "gorilla0000", "gorilla0001", "gorilla0002")
+#' plotter <- denovo_plotter(trio)
 denovo_plotter <- function(x) {
     new_denovo_plotter(x)
 }
 
-#' Plot a `denovo_plotter` object.
-#'
-#' @param x A [`denovo_plotter`] object.
-#' @param y Kept for compatibility with generic, but ignored here.
-#' @param ... Kept for compatibility with generic, but ignored here.
-#' @name plot.denovo_plotter
 #' @export
 plot.denovo_plotter <- function(x, y, ...) {
     old_par <- graphics::par(no.readonly = TRUE)
     on.exit(graphics::par(old_par), add = TRUE)
-    graphics::layout(matrix(1:6, nrow = 6), heights = c(0.1, 0.75, 0.25, 0.25, 0.1, 1))
-    # draw the plot title inside of a plot
-    graphics::par(mar = c(0, 0, 0, 0))
-    plot(
-        NULL,
-        xlim = c(0, 1),
-        ylim = c(0, 1),
-        ylab = "",
-        xlab = "",
-        xaxs = "i",
-        yaxs = "i",
-        xaxt = "n",
-        yaxt = "n",
-        frame.plot = FALSE
-    )
-    # TODO: add SV type and evidence types of the call
+    graphics::layout(matrix(1:5, nrow = 5), heights = c(1.2, 0.3, 0.4, 0.1, 1))
+    # TODO: add evidence types of the call
     main <- sprintf(
         "de novo SV (%s)\n%s (%s)",
         x$svtype,
         pretty_sample_id(x$trio$child),
         pretty_size(x$region$end - x$region$start + 1)
     )
-    text(x = 0.5, y = 0.5, labels = main, adj = c(0.5, 0.5))
 
     trio <- unlist(x$trio)
-    graphics::par(mar = c(0, 4.1, 0, 2.1), mgp = c(1, 1, 0))
-    plot(x$pe, samples = trio, col = TRIO_COLORS)
+    graphics::par(mar = c(0, 4.1, 4.1, 2.1), mgp = c(1, 1, 0))
+    plot(x$pe, samples = trio, main = main, col = TRIO_COLORS)
     draw_padding(x$region$start, x$region$end)
 
+    graphics::par(mar = c(0, 4.1, 0, 2.1), mgp = c(1, 1, 0))
     plot(x$sr, samples = trio, col = TRIO_COLORS)
     draw_padding(x$region$start, x$region$end)
 

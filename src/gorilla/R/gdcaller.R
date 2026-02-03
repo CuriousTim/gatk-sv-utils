@@ -1,24 +1,3 @@
-# Predict CNV carriers at GD regions.
-#
-# The general strategy for predicting carriers is to check the read depth
-# ratio of samples over a genomic region and pick samples that have elevated
-# or depressed values. Whether the read depth ratio is elevated or depressed
-# depends on the expected value and the minimum shift. The expected value
-# depends on the genomic region and sex of the sample. For autosomes and PAR
-# regions, the expected ratio is 2. For males, it is 1 on chrX and chrY. For
-# females, it is 2 on chrX and 0 on chrY. The minimum shift is a input
-# parameter to the algorithm which determines the required deviation of the
-# read depth ratio from the expectation.
-#
-# For NAHR-mediated GDs, the entire region is tested.
-#
-# For non-NAHR-mediated GDs, the test depends on the type.
-# For p-arm GDs, the first window (smaller genomic position) in the region is
-# tested.
-# For q-arm GDs, the last window (larger genomic position) in the region is
-# tested.
-# For non-terminal GDs, a rolling window across the region is tested.
-
 # the fraction of the region to use as the window size for non-NAHR GDs
 NON_NAHR_WINDOW_PROP <- 0.01
 # the minimum number of bins to use as the window size for non-NAHR GDs
@@ -42,20 +21,16 @@ CHRY_PAR1_END <- 2781479
 CHRY_PAR2_START <- 56887903
 CHRY_PAR2_END <- 57217415
 
-new_gdcaller <- function(gd, bincov_mat, segdups, sex_ploidy) {
+new_gdcaller <- function(gd, rd, sex_ploidy) {
     structure(
         list(
             gd = gd,
-            bincov_mat = bincov_mat,
-            segdups = segdups,
+            rd = rd,
+            segdups = segdups_gr,
             sex_ploidy = sex_ploidy
         ),
         class = "gdcaller"
     )
-}
-
-as_gdplotter <- function(x) {
-    new_gdplotter(x$gd, x$bincov_mat, x$segdups, x$carriers)
 }
 
 call_gds <- function(x, targets, min_shift) {
@@ -73,12 +48,13 @@ call_gds.gdcaller <- function(x, targets, min_shift) {
 run_gd_prediction <- function(x) {
     carriers <- character()
     gd_idx <- S4Vectors::queryHits(GenomicRanges::findOverlaps(
-        x$bincov_mat$ranges,
+        x$rd$ranges,
         GenomicRanges::GRanges(
             x$gd$chr,
             IRanges::IRanges(x$gd$start_GRCh38, x$gd$end_GRCh38)
         )
     ))
+
     if (x$gd$NAHR) {
         min_bins <- NAHR_WINDOW_MIN_BINS
         caller <- nahr_caller
@@ -88,23 +64,33 @@ run_gd_prediction <- function(x) {
     }
 
     if (length(gd_idx) >= min_bins) {
-        gd_bincov <- x$bincov_mat[gd_idx, x$targets]
+        gd_rd_mat <- x$rd$mat[gd_idx, x$targets, drop = FALSE]
+        gd_rd_ranges <- x$rd$ranges[gd_idx]
+
         sd_idx <- S4Vectors::queryHits(GenomicRanges::findOverlaps(
-            gd_bincov$ranges,
+            gd_rd_ranges,
             x$segdups
         ))
-        gd_bincov$rd[sd_idx, ] <- NA_real_
+        gd_rd_mat[sd_idx, ] <- NA_real_
+
         sex <- NULL
-        sexes <- x$sex_ploidy[colnames(gd_bincov$rd), sex]
-        expected_rdr <- get_expected_rdr(
+        sexes <- x$sex_ploidy[colnames(gd_rd_mat), sex]
+        expected_rd <- get_expected_rd(
             x$gd$chr,
             x$gd$start_GRCh38,
             x$gd$end_GRCh38,
             sexes
         )
-        rdr_comparator <- make_rdr_comparator(x$gd$svtype, x$min_shift)
+        rd_comparator <- make_rd_comparator(x$gd$svtype, x$min_shift)
 
-        carriers <- caller(x, gd_bincov, sd_idx, expected_rdr, rdr_comparator)
+        carriers <- caller(
+            x,
+            gd_rd_ranges,
+            gd_rd_mat,
+            sd_idx,
+            expected_rd,
+            rd_comparator
+        )
     }
 
     x$carriers <- carriers
@@ -112,54 +98,74 @@ run_gd_prediction <- function(x) {
     x
 }
 
-nahr_caller <- function(x, gd_bincov, sd_idx, expected_rdr, rdr_comparator) {
-    if (length(gd_bincov$ranges) == length(sd_idx)) {
+nahr_caller <- function(
+    x,
+    gd_rd_ranges,
+    gd_rd_mat,
+    sd_idx,
+    expected_rd,
+    rd_comparator
+) {
+    if (length(gd_rd_ranges) == length(sd_idx)) {
         character()
     } else {
-        m <- matrixStats::colMedians(gd_bincov$rd, na.rm = TRUE)
-        names(m[rdr_comparator(expected_rdr, m)])
+        m <- matrixStats::colMedians(gd_rd_mat, na.rm = TRUE)
+        names(m[rd_comparator(expected_rd, m)])
     }
 }
 
 non_nahr_caller <- function(
     x,
-    gd_bincov,
+    gd_rd_ranges,
+    gd_rd_mat,
     sd_idx,
-    expected_rdr,
-    rdr_comparator
+    expected_rd,
+    rd_comparator
 ) {
     if (x$gd$terminal == "no") {
         non_terminal_non_nahr_caller(
             x,
-            gd_bincov,
+            gd_rd_ranges,
+            gd_rd_mat,
             sd_idx,
-            expected_rdr,
-            rdr_comparator
+            expected_rd,
+            rd_comparator
         )
     } else {
-        terminal_non_nahr_caller(x, gd_bincov, expected_rdr, rdr_comparator)
+        terminal_non_nahr_caller(
+            x,
+            gd_rd_ranges,
+            gd_rd_mat,
+            expected_rd,
+            rd_comparator
+        )
     }
 }
 
 terminal_non_nahr_caller <- function(
     x,
-    gd_bincov,
-    expected_rdr,
-    rdr_comparator
+    gd_rd_ranges,
+    gd_rd_mat,
+    sd_idx,
+    expected_rd,
+    rd_comparator
 ) {
     carriers <- character()
     window_size <- non_nahr_window_size(x)
 
-    if (x$gd$terminal == "p") {
-        bins <- seq_len(window_size)
-    } else {
-        bins <- seq.int(nrow(gd_bincov$rd) - window_size, nrow(gd_bincov$rd))
-    }
+    if (length(gd_rd_ranges) >= window_size) {
+        if (x$gd$terminal == "p") {
+            bins <- seq_len(window_size)
+        } else {
+            bins <- seq.int(
+                length(gd_rd_ranges) - window_size + 1,
+                length(gd_rd_ranges)
+            )
+        }
 
-    if (nrow(gd_bincov$rd) >= length(bins)) {
-        m <- matrixStats::colMedians(gd_bincov$rd, rows = bins, na.rm = TRUE)
-        if (all(!is.na(m))) {
-            carriers <- names(m[rdr_comparator(expected_rdr, m)])
+        medians <- matrixStats::colMedians(gd_rd_mat, rows = bins, na.rm = TRUE)
+        if (all(!is.nan(medians))) {
+            carriers <- names(medians[rd_comparator(expected_rd, medians)])
         }
     }
 
@@ -168,14 +174,16 @@ terminal_non_nahr_caller <- function(
 
 non_terminal_non_nahr_caller <- function(
     x,
-    gd_bincov,
+    gd_rd_ranges,
+    gd_rd_mat,
     sd_idx,
-    expected_rdr,
-    rdr_comparator
+    expected_rd,
+    rd_comparator
 ) {
     carriers <- character()
     window_size <- non_nahr_window_size(x)
-    tmp <- rep.int(0, length(gd_bincov$ranges))
+
+    tmp <- rep.int(0, length(gd_rd_ranges))
     tmp[sd_idx] <- 1L
     sums <- data.table::frollsum(
         tmp,
@@ -183,13 +191,15 @@ non_terminal_non_nahr_caller <- function(
         align = "center",
         hasNA = FALSE
     )
+
+    # find windows with at least one bin that is not overlapping a segdup
     callable_windows <- which(!is.na(sums) & sums < window_size)
     if (length(callable_windows) > 0) {
-        m <- apply(gd_bincov$rd, 2, \(x) stats::runmed(x, window_size))
+        m <- apply(gd_rd_mat, 2, \(x) stats::runmed(x, window_size))
         m <- m[callable_windows, , drop = FALSE]
         pass <- vapply(
             seq_len(ncol(m)),
-            \(i) any(rdr_comparator(expected_rdr[[i]], m[, i])),
+            \(i) any(rd_comparator(expected_rd[[i]], m[, i])),
             logical(1)
         )
         carriers <- colnames(m)[pass]
@@ -198,10 +208,10 @@ non_terminal_non_nahr_caller <- function(
     carriers
 }
 
-# Return a function that accepts an vector of expected read-depth ratios and
-# actual read-depth ratios, and reports which actual ratios are higher or lower
-# than expected, given the expected SV type and minimum shift.
-make_rdr_comparator <- function(svtype, min_shift) {
+# Return a function that accepts vectors of expected read-depth and
+# actual read-depth, and reports which actual read-depth values are higher or
+# lower than expected, given the expected SV type and minimum shift.
+make_rd_comparator <- function(svtype, min_shift) {
     op <- if (svtype == "DUP") {
         function(expected, actual) {
             actual >= expected + min_shift
@@ -220,10 +230,10 @@ make_rdr_comparator <- function(svtype, min_shift) {
     }
 }
 
-# Compute the expected read depth ratio for some samples of the given sexes,
-# given a genomic region.
-# `sex_ploidy` can be (NA = unknown, 1 = male, 2 = female).
-get_expected_rdr <- function(chr, start, end, sex_ploidy) {
+# Compute the expected read-depth for some samples of the given sexes,
+# given a genomic region. `sex_ploidy` can be
+# (NA = unknown, 1 = male, 2 = female).
+get_expected_rd <- function(chr, start, end, sex_ploidy) {
     tmp <- if (chr == "chrX") {
         if (ovp_chrx_par(start, end)) {
             sex_ploidy[sex_ploidy == 1L] <- 2L
@@ -269,6 +279,8 @@ non_nahr_window_size <- function(x) {
         NON_NAHR_WINDOW_MIN_BINS,
         round((x$gd$end_GRCh38 - x$gd$start_GRCh38 + 1) * frac / BIN_WIDTH)
     )
+
+    # window size must be odd for rolling median
     if (w %% 2 == 0) {
         w <- w + 1
     }

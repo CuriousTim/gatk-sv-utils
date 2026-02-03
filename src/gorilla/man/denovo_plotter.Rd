@@ -2,7 +2,7 @@
 % Please edit documentation in R/denovo_plotter.R
 \name{denovo_plotter}
 \alias{denovo_plotter}
-\title{Create a new \code{denovo_plotter} object.}
+\title{Create a new \code{denovo_plotter} object}
 \usage{
 denovo_plotter(x)
 }
@@ -15,4 +15,43 @@ A \code{denovo_plotter} object.
 \description{
 A \code{denovo_plotter} can create a visualization of de novo SV evidence for a
 child, father, mother trio.
+}
+\details{
+The plot will display evidence from discordant read pairs, split reads and
+read depth, along with some annotations.
+}
+\examples{
+pe_path <- system.file(
+    "extdata",
+    "example.PE.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+sr_path <- system.file(
+    "extdata",
+    "example.SR.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+rd_path <- system.file(
+    "extdata",
+    "example.RD.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+medians_path <- system.file(
+    "extdata",
+    "example_medianCov.txt",
+    package = "gorilla",
+    mustWork = TRUE
+)
+
+pe <- pe_file(pe_path)
+sr <- sr_file(sr_path)
+rd_medians <- read_median_coverages(medians_path)
+rd <- rd_file(rd_path, rd_medians)
+
+sv <- svevidence("chr16", 28743149, 28745149, pe, sr, rd, "DUP")
+trio <- svtrio(sv, "gorilla0000", "gorilla0001", "gorilla0002")
+plotter <- denovo_plotter(trio)
 }

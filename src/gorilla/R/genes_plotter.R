@@ -1,18 +1,3 @@
-# construct an object that can plot genes
-new_genes_plotter <- function(contig, start, end) {
-    query <- GenomicRanges::GRanges(contig, IRanges::IRanges(start, end))
-    ovps <- GenomicRanges::findOverlaps(query, genes_gr)
-    genes <- genes_gr[S4Vectors::subjectHits(ovps)] |> split_gene_table()
-
-    structure(
-        list(
-            genes = genes,
-            region = list(contig = contig, start = start, end = end)
-        ),
-        class = "genes_plotter"
-    )
-}
-
 #' @export
 plot.genes_plotter <- function(x, y, gene_lanes = 16, ...) {
     # maybe it would be better to set the y-axis limits some fraction larger
@@ -32,6 +17,21 @@ plot.genes_plotter <- function(x, y, gene_lanes = 16, ...) {
     if (length(x$genes) > 0) {
         invisible(plot_genes(x$genes, gene_lanes))
     }
+}
+
+# construct an object that can plot genes
+new_genes_plotter <- function(contig, start, end) {
+    query <- GenomicRanges::GRanges(contig, IRanges::IRanges(start, end))
+    ovps <- GenomicRanges::findOverlaps(query, genes_gr)
+    genes <- genes_gr[S4Vectors::subjectHits(ovps)] |> split_gene_table()
+
+    structure(
+        list(
+            genes = genes,
+            region = list(contig = contig, start = start, end = end)
+        ),
+        class = "genes_plotter"
+    )
 }
 
 plot_genes <- function(x, nlanes) {
@@ -82,7 +82,7 @@ draw_gene <- function(x, lane, display_start) {
         border = NA
     )
 
-    xmin <- par("usr")[[1]]
+    xmin <- graphics::par("usr")[[1]]
     # don't print ENSG gene names to save space
     if (!grepl("^ENSG[0-9]+", x[1, ]$gene_name)) {
         # plotting gene name to left of gene can cause them to be truncated

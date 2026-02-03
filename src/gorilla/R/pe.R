@@ -1,16 +1,21 @@
-#' Create a new `pe_file` object.
-#'
-#' @param x Path to the PE matrix file.
-#' @returns A `pe_file` object.
+#' @rdname svevidencefiles
 #' @export
-pe_file <- function(x) {
-    new_pe_file(x)
+pe_file <- function(path) {
+    new_pe_file(path)
 }
 
 #' @rdname query
 #' @export
 query.pe_file <- function(x, contig, start, end) {
-    coltypes <- c(list(character(), integer(), character(), character(), integer(), character(), character()))
+    coltypes <- c(list(
+        character(),
+        integer(),
+        character(),
+        character(),
+        integer(),
+        character(),
+        character()
+    ))
     results <- tabix(x$handle, contig, start, end, coltypes)
 
     names(results) <- c(
@@ -44,16 +49,19 @@ subset_samples.pe_mat <- function(x, samples) {
 
     samples <- unique(samples)
     mat <- x$mat[samples, mult = "all", nomatch = NULL]
+
+    sample_id <- NULL
+    rstart <- NULL
     data.table::setkey(mat, sample_id, rstart)
     x$mat <- mat
 
     x
 }
 
-new_pe_file <- function(x) {
-    stopifnot(is_string(x))
+new_pe_file <- function(path) {
+    stopifnot(is_string(path))
 
-    handle <- Rsamtools::TabixFile(x)
+    handle <- Rsamtools::TabixFile(path)
 
     structure(list(handle = handle), class = "pe_file")
 }

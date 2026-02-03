@@ -12,32 +12,95 @@ BIN_PLOT_FRACTION <- 0.05
 # minimum number of intervals to plot
 MIN_PLOT_INTERVALS <- 100
 
-#' Create a new `rd_plotter` object.
+#' Create a new `rd_plotter` object
 #'
 #' A `rd_plotter` can create a visualization of read depth.
 #'
 #' @param x A [`rd_mat`][query()] object.
 #' @returns A `rd_plotter` object.
 #' @export
+#'
+#' @examples
+#' rd_path <- system.file(
+#'     "extdata",
+#'     "example.RD.txt.gz",
+#'     package = "gorilla",
+#'     mustWork = TRUE
+#' )
+#' medians_path <- system.file(
+#'     "extdata",
+#'     "example_medianCov.txt",
+#'     package = "gorilla",
+#'     mustWork = TRUE
+#' )
+#'
+#' rd_medians <- read_median_coverages(medians_path)
+#' rd <- rd_file(rd_path, rd_medians)
+#' mat <- query(rd, "chr16", 28743149, 28745149)
+#' plotter <- rd_plotter(mat)
 rd_plotter <- function(x) {
     new_rd_plotter(x)
 }
 
-#' Plot a `rd_plotter` object.
+#' Plot a `rd_plotter` object
 #'
-#' @param x A [`rd_plotter`] object.
-#' @param y Kept for compatability with generic, but ignored here.
+#' The `plot()` method for `rd_plotter`.
+#'
+#' The only additional parameter that is accepted is `col`, which should be a
+#' string or a character vector equal to the length of `samples` giving the
+#' colors to use for each sample.
+#'
+#' @param x A [`rd_plotter`][rd_plotter()] object.
+#' @param y Ignored.
 #' @param samples Samples to plot.
 #' @param bg_samples Samples to use as background samples. If `NULL`,
 #'   background samples are not included.
-#' @param ... Other plotting parameters. Currently the only accepted parameter
-#'   is `col` which should either be a character vector of length 1 or length
-#'   equal to `samples` giving the colors to use for each sample.
+#' @param main Title for the plot. Use `NULL` to omit.
+#' @param col Color(s) to use for `samples`. Either a string or a character
+#'   vector of hexadecimal colors equal to the length of `samples`
+#' @param ... Ignored.
 #' @name plot.rd_plotter
 #' @export
-plot.rd_plotter <- function(x, y, samples, bg_samples = NULL, ...) {
+#'
+#' @examples
+#' rd_path <- system.file(
+#'     "extdata",
+#'     "example.RD.txt.gz",
+#'     package = "gorilla",
+#'     mustWork = TRUE
+#' )
+#' medians_path <- system.file(
+#'     "extdata",
+#'     "example_medianCov.txt",
+#'     package = "gorilla",
+#'     mustWork = TRUE
+#' )
+#'
+#' rd_medians <- read_median_coverages(medians_path)
+#'
+#' rd <- rd_file(rd_path, rd_medians)
+#' mat <- query(rd, "chr16", 28743149, 28745149)
+#' plotter <- rd_plotter(mat)
+#' plot(plotter, samples = c("gorilla0000", "gorilla0001"))
+plot.rd_plotter <- function(
+    x,
+    y,
+    samples,
+    bg_samples = NULL,
+    main = "",
+    col = "#000000",
+    ...
+) {
     stopifnot(is.character(samples) && length(samples) > 0)
-    stopifnot(is.null(bg_samples) || (is.character(bg_samples) && length(bg_samples) > 0))
+    stopifnot(
+        is.null(bg_samples) ||
+            (is.character(bg_samples) && length(bg_samples) > 0)
+    )
+    stopifnot(is_string(main))
+    stopifnot(
+        is.character(col) &&
+            (length(col) == 1 || length(col) == length(samples))
+    )
 
     plot(
         NULL,
@@ -47,12 +110,8 @@ plot.rd_plotter <- function(x, y, samples, bg_samples = NULL, ...) {
         xlab = "",
         xaxs = "i",
         xaxt = "n",
-        las = 2
-    )
-
-    col <- tryCatch(
-        color_from_dots(length(samples), ...),
-        value_error = function(e) stop("length of `col` must be 1 or equal to length of `samples`")
+        las = 2,
+        main = main
     )
 
     draw_bg_samples_rd(x, bg_samples)
@@ -68,7 +127,7 @@ draw_samples_rd <- function(x, samples, color) {
         graphics::lines(
             x$bin_mids,
             x$mat[x$bins_to_plot, samples[[i]], drop = FALSE],
-            col = color[[i]],
+            col = if (length(color) == 1) color else color[[i]],
             lwd = 2
         )
     }
@@ -93,7 +152,7 @@ new_rd_plotter <- function(x) {
     stopifnot(inherits(x, "rd_mat"))
 
     if (x$region$end - x$region$start + 1 >= MIN_SMOOTH_REGION) {
-        x <- smooth(x, SMOOTHING_WINDOW)
+        x <- smooth_rd(x, SMOOTHING_WINDOW)
     }
     bins_to_plot <- spaced_intervals(length(x$ranges))
     bin_mids <- GenomicRanges::start(x$ranges[bins_to_plot]) +

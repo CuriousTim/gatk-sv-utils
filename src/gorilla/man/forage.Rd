@@ -2,12 +2,11 @@
 % Please edit documentation in R/forage.R
 \name{forage}
 \alias{forage}
-\title{Forage for genomic disorders.}
+\title{Forage for genomic disorders}
 \usage{
 forage(
   gds_path,
-  sds_path,
-  bincov_path,
+  rd_path,
   medians_path,
   samples_path,
   sex_ploidy_path,
@@ -20,11 +19,9 @@ forage(
 }
 \arguments{
 \item{gds_path}{Path to the genomic disorders table file. See
-\code{\link[=read_gdtable]{read_gdtable}}}
+\code{\link[=read_gdtable]{read_gdtable()}}}
 
-\item{sds_path}{Path to a BEDX file of hg38 segmental duplication regions.}
-
-\item{bincov_path}{Path to the binned coverage matrix.}
+\item{rd_path}{Path to the binned coverage matrix.}
 
 \item{medians_path}{Path to the median coverages file.}
 
@@ -42,8 +39,8 @@ The file must not have column headers.
 doesn't exist and any files that match the name of a plot created by the
 workflow will be silently overwritten.}
 
-\item{min_shift}{Minimum amount by which the read-depth ratio of a sample
-must be shifted from expectation to be considered a GD carrier.}
+\item{min_shift}{Minimum amount by which the normalized read-depth of a
+sample must be shifted from expectation to be considered a carrier.}
 
 \item{pad}{Proportion of the GD region that should be included on either
 side when plotting.}
@@ -55,6 +52,51 @@ before it is marked as an outlier and all of its calls are treated as false.}
 will be written. If \code{NULL}, outlier samples are not recorded.}
 }
 \description{
-A convenience function to run the genomic disorder calling workflow on a set
-of inputs.
+Predict genomic disorder CNVs using read depth evidence from GATK-SV.
+}
+\section{Algorithm Overview}{
+Given a set of genomic disorder regions, inspect the binned read-depth
+over each region for each sample and determine if a sample potentially
+carries a CNV by comparing its normalized read-depth (NRD) to its expected
+value.  Samples with sufficiently different NRD are considered to be
+carriers. The threshold for "sufficiently different" is given by
+\code{min_shift}. For XX samples, the expected NRD is 1 for chr1-22 and chrX and
+0 for chrY. For XY, the expected NRD is 1 for chr1-22 and the
+pseudoatuosomal regions of chrX and chrY and 0.5 for the rest of chrX and
+chrY. For all other samples, the expected NRD is 1 for chr1-22, but chrX and
+chrY are ignored. There are slightly different tests depending on the type
+of the genomic disorder, but any base that overlaps a segmental duplication
+is excluded from consideration.
+\subsection{DEL vs DUP}{
+
+For duplications, the sample NRD must be greater than its expected NRD,
+while for deletions, the sample NRD must be less than its expected NRD.
+}
+
+\subsection{NAHR-mediated}{
+
+The median of the NRD over the entire region is compared to
+to the expected value for each sample. There must be at least 50 read-depth
+bins overlapping the region to make a call.
+}
+
+\subsection{Terminal non-NAHR mediated}{
+
+A window of 20\% of the region (minimum 101 bins) anchored to one end of
+the region (upstream for p-arm, downstream for q-arm) is used to compute the
+median NRD and compared to the expected NRD.
+}
+
+\subsection{Non-terminal non-NAHR mediated}{
+
+A window of 1\% of the region (minimum 101 bins) is used to compute a rolling
+median of NRD over the region and the value of each window is compared to the
+expected NRD. If a sample is sufficiently different from expectation at any
+window, it is considered a carrier.
+}
+}
+
+\section{Output}{
+The algorithm will create a visualization of the read-depth evidence for
+each call it makes.
 }

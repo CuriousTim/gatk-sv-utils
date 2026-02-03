@@ -6,7 +6,7 @@
 \alias{query}
 \alias{query.rd_file}
 \alias{query.sr_file}
-\title{Query an object with a genomic region.}
+\title{Query an object with a genomic region}
 \usage{
 \method{query}{bincov_file}(x, contig, start, end)
 
@@ -28,11 +28,11 @@ query(x, contig, start, end)
 \item{end}{The end of the region (inclusive).}
 }
 \value{
-An object representing the queried region or \code{NULL} if the region
-does not overlap any intervals in \code{x}.
+An object representing the queried region.
 }
 \description{
-\code{query()} retrieves some genomic region from \code{x}.
+\code{query()} retrieves some genomic region from \code{x}. Usually \code{x} is an object
+representing some on-disk file indexed by genomic coordinates.
 }
 \details{
 The method for \code{\link[=rd_file]{rd_file}} retrieves all the bins
@@ -41,7 +41,12 @@ overlapping a region from the RD matrix and returns an \code{rd_mat} object.
 The method for \code{\link[=sr_file]{sr_file}} retrieves all split read alignments
 overlapping a region from the SR matrix and returns an \code{sr_mat} object.
 
-The method for \code{\link[=pe_file]{pe_file}} retrieves all aberrant paired-end
+The method for \code{\link[=pe_file]{pe_file}} retrieves all discordant paired-end
 reads alignments overlapping a region from the PE matrix and returns a
 \code{pe_mat} object. Only the upstream read is checked for overlap.
+}
+\examples{
+pe_path <- system.file("extdata", "example.PE.txt.gz", package = "gorilla", mustWork = TRUE)
+pe <- pe_file(pe_path)
+mat <- query(pe, "chr16", 28743149, 28745149)
 }

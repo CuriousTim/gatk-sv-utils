@@ -2,22 +2,37 @@
 % Please edit documentation in R/pe_plotter.R
 \name{plot.pe_plotter}
 \alias{plot.pe_plotter}
-\title{Plot a \code{pe_plotter} object.}
+\title{Plot a \code{pe_plotter} object}
 \usage{
-\method{plot}{pe_plotter}(x, y, samples, ...)
+\method{plot}{pe_plotter}(x, y, samples, main = "", col = "#000000", ...)
 }
 \arguments{
-\item{x}{A \code{\link{pe_plotter}} object.}
+\item{x}{A \code{\link[=pe_plotter]{pe_plotter}} object.}
 
-\item{y}{Kept for compatability with generic, but ignored here.}
+\item{y}{Ignored.}
 
 \item{samples}{Samples to plot. The samples will be plotted from top to
 bottom in the order they are given.}
 
-\item{...}{Other plotting parameters. Currently the only accepted parameter
-is \code{col} which should either be a character vector of length 1 or length
-equal to \code{samples} giving the colors to use for each sample.}
+\item{main}{Title for the plot.}
+
+\item{col}{Color(s) to use for \code{samples}. Either a string or a character
+vector of hexadecimal colors equal to the length of \code{samples}}
+
+\item{...}{Ignored.}
 }
 \description{
-Plot a \code{pe_plotter} object.
+The \code{plot()} method for \code{pe_plotter}.
+}
+\details{
+The only additional parameter that is accepted is \code{col}, which should be a
+string or a character vector equal to the length of \code{samples} giving the
+colors to use for each sample.
+}
+\examples{
+pe_path <- system.file("extdata", "example.PE.txt.gz", package = "gorilla", mustWork = TRUE)
+pe <- pe_file(pe_path)
+mat <- query(pe, "chr16", 28743149, 28745149)
+plotter <- pe_plotter(mat)
+plot(plotter, samples = "gorilla0003")
 }

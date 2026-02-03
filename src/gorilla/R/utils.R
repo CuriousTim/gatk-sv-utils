@@ -2,6 +2,13 @@ is_string <- function(x) {
     is.character(x) && length(x) == 1
 }
 
+is_number <- function(x) {
+    is.numeric(x) && length(x) == 1
+}
+
+# Add colored rectangles over the left and right sides of a plot where the
+# x-axis is genomic coordinates. The rectangles represent regions of the genome
+# flanking the region of interest.
 draw_padding <- function(inner_start, inner_end) {
     axlims <- graphics::par("usr")
     graphics::rect(
@@ -23,6 +30,8 @@ draw_padding <- function(inner_start, inner_end) {
     )
 }
 
+# Draw an axis on the bottom of a plot showing genomic coordinates, including
+# an axis label of the form "<contig> Position (bp)".
 draw_genomic_coords_axis <- function(contig) {
     axlims <- graphics::par("usr")
     xticks <- grDevices::axisTicks(axlims[1:2], log = FALSE, nint = 10)
@@ -36,7 +45,7 @@ draw_genomic_coords_axis <- function(contig) {
         tcl = -1
     )
     graphics::mtext(xlabs, 1, at = xticks, adj = 1.05, cex = 0.6)
-    graphics::title(xlab = sprintf("%s Position (bp)", contig), line = 2)
+    graphics::title(xlab = sprintf("%s Position (bp)", contig), line = 1.5)
 }
 
 # Format a sample ID into a pretty string for plotting.
@@ -56,23 +65,5 @@ pretty_size <- function(size) {
         sprintf("%.2f Kb", size / 1000)
     } else {
         sprintf("%.2f Mb", size / 1000000)
-    }
-}
-
-color_from_dots <- function(n, ...) {
-    dots <- list(...)
-    col <- dots[["col"]]
-    if (!is.null(col) && !is.character(col)) {
-        stop(errorCondition("`col` must be `NULL` or a character vector", class = "type_error"))
-    }
-
-    if (is.null(col)) {
-        rep("#000000", n)
-    } else if (length(col) == 1) {
-        rep(col, n)
-    } else if (length(col) == n) {
-        col
-    } else {
-        stop(errorCondition("", class = "value_error"))
     }
 }

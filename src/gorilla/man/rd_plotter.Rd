@@ -2,7 +2,7 @@
 % Please edit documentation in R/rd_plotter.R
 \name{rd_plotter}
 \alias{rd_plotter}
-\title{Create a new \code{rd_plotter} object.}
+\title{Create a new \code{rd_plotter} object}
 \usage{
 rd_plotter(x)
 }
@@ -14,4 +14,23 @@ A \code{rd_plotter} object.
 }
 \description{
 A \code{rd_plotter} can create a visualization of read depth.
+}
+\examples{
+rd_path <- system.file(
+    "extdata",
+    "example.RD.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+medians_path <- system.file(
+    "extdata",
+    "example_medianCov.txt",
+    package = "gorilla",
+    mustWork = TRUE
+)
+
+rd_medians <- read_median_coverages(medians_path)
+rd <- rd_file(rd_path, rd_medians)
+mat <- query(rd, "chr16", 28743149, 28745149)
+plotter <- rd_plotter(mat)
 }

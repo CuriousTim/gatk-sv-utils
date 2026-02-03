@@ -1,16 +1,19 @@
-#' Create a new `sr_file` object.
-#'
-#' @param x Path to the SR matrix file.
-#' @returns A `sr_file` object.
+#' @rdname svevidencefiles
 #' @export
-sr_file <- function(x) {
-    new_sr_file(x)
+sr_file <- function(path) {
+    new_sr_file(path)
 }
 
 #' @rdname query
 #' @export
 query.sr_file <- function(x, contig, start, end) {
-    coltypes <- list(character(), integer(), character(), integer(), character())
+    coltypes <- list(
+        character(),
+        integer(),
+        character(),
+        integer(),
+        character()
+    )
     results <- tabix(x$handle, contig, start, end, coltypes)
 
     names(results) <- c(
@@ -42,16 +45,19 @@ subset_samples.sr_mat <- function(x, samples) {
 
     samples <- unique(samples)
     mat <- x$mat[samples, mult = "all", nomatch = NULL]
+
+    sample_id <- NULL
+    pos <- NULL
     data.table::setkey(mat, sample_id, pos)
     x$mat <- mat
 
     x
 }
 
-new_sr_file <- function(x) {
-    stopifnot(is_string(x))
+new_sr_file <- function(path) {
+    stopifnot(is_string(path))
 
-    handle <- Rsamtools::TabixFile(x)
+    handle <- Rsamtools::TabixFile(path)
 
     structure(list(handle = handle), class = "sr_file")
 }

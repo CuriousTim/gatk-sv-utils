@@ -1,12 +1,55 @@
-#' Forage for genomic disorders.
+#' Forage for genomic disorders
 #'
-#' A convenience function to run the genomic disorder calling workflow on a set
-#' of inputs.
+#' Predict genomic disorder CNVs using read depth evidence from GATK-SV.
+#'
+#' @details
+#' # Algorithm Overview
+#'
+#' Given a set of genomic disorder regions, inspect the binned read-depth
+#' over each region for each sample and determine if a sample potentially
+#' carries a CNV by comparing its normalized read-depth (NRD) to its expected
+#' value.  Samples with sufficiently different NRD are considered to be
+#' carriers. The threshold for "sufficiently different" is given by
+#' `min_shift`. For XX samples, the expected NRD is 1 for chr1-22 and chrX and
+#' 0 for chrY. For XY, the expected NRD is 1 for chr1-22 and the
+#' pseudoatuosomal regions of chrX and chrY and 0.5 for the rest of chrX and
+#' chrY. For all other samples, the expected NRD is 1 for chr1-22, but chrX and
+#' chrY are ignored. There are slightly different tests depending on the type
+#' of the genomic disorder, but any base that overlaps a segmental duplication
+#' is excluded from consideration.
+#'
+#' ## DEL vs DUP
+#'
+#' For duplications, the sample NRD must be greater than its expected NRD,
+#' while for deletions, the sample NRD must be less than its expected NRD.
+#'
+#' ## NAHR-mediated
+#'
+#' The median of the NRD over the entire region is compared to
+#' to the expected value for each sample. There must be at least 50 read-depth
+#' bins overlapping the region to make a call.
+#'
+#' ## Terminal non-NAHR mediated
+#'
+#' A window of 20% of the region (minimum 101 bins) anchored to one end of
+#' the region (upstream for p-arm, downstream for q-arm) is used to compute the
+#' median NRD and compared to the expected NRD.
+#'
+#' ## Non-terminal non-NAHR mediated
+#'
+#' A window of 1% of the region (minimum 101 bins) is used to compute a rolling
+#' median of NRD over the region and the value of each window is compared to the
+#' expected NRD. If a sample is sufficiently different from expectation at any
+#' window, it is considered a carrier.
+#'
+#' # Output
+#'
+#' The algorithm will create a visualization of the read-depth evidence for
+#' each call it makes.
 #'
 #' @param gds_path Path to the genomic disorders table file. See
-#'   [`read_gdtable`][read_gdtable()]
-#' @param sds_path Path to a BEDX file of hg38 segmental duplication regions.
-#' @param bincov_path Path to the binned coverage matrix.
+#'   [read_gdtable()]
+#' @param rd_path Path to the binned coverage matrix.
 #' @param medians_path Path to the median coverages file.
 #' @param samples_path Path to a list of samples, one-per-line, to process.
 #' @param sex_ploidy_path Path to a ploidy table. The format is a tab-delimited
@@ -17,8 +60,8 @@
 #' @param outdir_path Path the output directory. It will be created if it
 #'   doesn't exist and any files that match the name of a plot created by the
 #'   workflow will be silently overwritten.
-#' @param min_shift Minimum amount by which the read-depth ratio of a sample
-#'   must be shifted from expectation to be considered a GD carrier.
+#' @param min_shift Minimum amount by which the normalized read-depth of a
+#'   sample must be shifted from expectation to be considered a carrier.
 #' @param pad Proportion of the GD region that should be included on either
 #'   side when plotting.
 #' @param max_calls_per_sample Maximum number of GD calls a sample can have
@@ -28,8 +71,7 @@
 #' @export
 forage <- function(
     gds_path,
-    sds_path,
-    bincov_path,
+    rd_path,
     medians_path,
     samples_path,
     sex_ploidy_path,
@@ -40,15 +82,14 @@ forage <- function(
     outliers_log_path = NULL
 ) {
     gds <- read_gdtable(gds_path)
-    sds <- read_segdups(sds_path)
     medians <- read_median_coverages(medians_path)
-    bf <- bincov_file(bincov_path, medians)
+    rd_handle <- rd_file(rd_path, medians)
     target_samples <- readLines(samples_path)
     if (length(target_samples) == 0) {
         stop("at least one sample to check for GDs must be given")
     }
 
-    if (!all(target_samples %in% bf$header)) {
+    if (!all(target_samples %in% rd_handle$header)) {
         stop("all requested samples must be in the bincov matrix")
     }
 
@@ -66,8 +107,8 @@ forage <- function(
         }
 
         gd <- gds[i, ]
-        bincov_mat <- query(bf, gd$chr, gd$qstart, gd$qend)
-        caller <- new_gdcaller(gd, bincov_mat, sds, sex_ploidy)
+        rd <- query(rd_handle, gd$chr, gd$qstart, gd$qend)
+        caller <- new_gdcaller(gd, rd, sex_ploidy)
         caller <- call_gds(caller, active_samples, min_shift)
 
         if (length(caller$carriers) == 0) {
@@ -88,15 +129,11 @@ forage <- function(
 
 # Helper function to generate plots for all the GD carriers after calling.
 make_gd_plots <- function(caller, outdir, calls_record) {
-    plotter <- as_gdplotter(caller)
+    plotter <- new_gd_plotter(caller)
     for (i in seq_along(caller$carriers)) {
         plot_name <- sprintf(
-            "%s_%d-%d_%s_%s_%s.jpg",
-            caller$gd$chr,
-            caller$gd$start_GRCh38,
-            caller$gd$end_GRCh38,
+            "%s~~%s.jpg",
             caller$gd$GD_ID,
-            caller$gd$svtype,
             caller$carriers[[i]]
         )
         plot_path <- file.path(outdir, plot_name)

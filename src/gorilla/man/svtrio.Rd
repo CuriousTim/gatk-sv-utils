@@ -2,18 +2,18 @@
 % Please edit documentation in R/svtrio.R
 \name{svtrio}
 \alias{svtrio}
-\title{Create a new \code{svtrio} object.}
+\title{Create a new \code{svtrio} object}
 \usage{
 svtrio(evidence, child, father, mother)
 }
 \arguments{
-\item{evidence}{A \code{sveidence} object.}
+\item{evidence}{A \code{\link{svevidence}} object.}
 
-\item{child}{The child sample.}
+\item{child}{The child sample ID.}
 
-\item{father}{The father sample.}
+\item{father}{The father sample ID.}
 
-\item{mother}{The mother sample.}
+\item{mother}{The mother sample ID.}
 }
 \value{
 A \code{svtrio} object.
@@ -21,4 +21,38 @@ A \code{svtrio} object.
 \description{
 The \code{svtrio} object represents SV evidence over a genomic region for a
 child, father, mother trio of samples.
+}
+\examples{
+pe_path <- system.file(
+    "extdata",
+    "example.PE.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+sr_path <- system.file(
+    "extdata",
+    "example.SR.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+rd_path <- system.file(
+    "extdata",
+    "example.RD.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+medians_path <- system.file(
+   "extdata",
+   "example_medianCov.txt",
+   package = "gorilla",
+   mustWork = TRUE
+)
+
+pe <- pe_file(pe_path)
+sr <- sr_file(sr_path)
+rd_medians <- read_median_coverages(medians_path)
+rd <- rd_file(rd_path, rd_medians)
+
+sv <- svevidence("chr16", 28743149, 28745149, pe, sr, rd, "DUP")
+trio <- svtrio(sv, "gorilla0000", "gorilla0001", "gorilla0002")
 }

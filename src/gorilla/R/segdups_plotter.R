@@ -1,8 +1,8 @@
-# construct an object that can plot segmental duplications
 new_segdups_plotter <- function(contig, start, end) {
     query <- GenomicRanges::GRanges(contig, IRanges::IRanges(start, end))
     ovps <- GenomicRanges::findOverlaps(query, segdups_gr)
-    segdups <- segdups_gr[S4Vectors::subjectHits(ovps)] |> GenomicRanges::reduce()
+    segdups <- segdups_gr[S4Vectors::subjectHits(ovps)] |>
+        GenomicRanges::reduce()
 
     structure(
         list(

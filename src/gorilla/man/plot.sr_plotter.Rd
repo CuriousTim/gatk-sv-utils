@@ -2,22 +2,37 @@
 % Please edit documentation in R/sr_plotter.R
 \name{plot.sr_plotter}
 \alias{plot.sr_plotter}
-\title{Plot a \code{sr_plotter} object.}
+\title{Plot a \code{sr_plotter} object}
 \usage{
-\method{plot}{sr_plotter}(x, y, samples, ...)
+\method{plot}{sr_plotter}(x, y, samples, main = "", col = "#000000", ...)
 }
 \arguments{
 \item{x}{A \code{\link{sr_plotter}} object.}
 
-\item{y}{Kept for compatability with generic, but ignored here.}
+\item{y}{Ignored.}
 
 \item{samples}{Samples to plot. The samples will be plotted from top to
 bottom in the order they are given.}
 
-\item{...}{Other plotting parameters. Currently the only accepted parameter
-is \code{col} which should either be a character vector of length 1 or length
-equal to \code{samples} giving the colors to use for each sample.}
+\item{main}{Title for the plot.}
+
+\item{col}{Color(s) to use for \code{samples}. Either a string or a character
+vector of hexadecimal colors equal to the length of \code{samples}}
+
+\item{...}{Ignored.}
 }
 \description{
-Plot a \code{sr_plotter} object.
+The \code{plot()} method for \code{sr_plotter}.
+}
+\details{
+The only additional parameter that is accepted is \code{col}, which should be a
+string or a character vector equal to the length of \code{samples} giving the
+colors to use for each sample.
+}
+\examples{
+sr_path <- system.file("extdata", "example.SR.txt.gz", package = "gorilla", mustWork = TRUE)
+sr <- sr_file(sr_path)
+mat <- query(sr, "chr16", 28743149, 28745149)
+plotter <- sr_plotter(mat)
+plot(plotter, samples = "gorilla0003")
 }

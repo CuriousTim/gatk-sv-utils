@@ -1,6 +1,6 @@
-PE_LANES_PER_SAMPLE <- 15
+PE_LANES_PER_SAMPLE <- 16
 
-#' Create a new `pe_plotter` object.
+#' Create a new `pe_plotter` object
 #'
 #' A `pe_plotter` can create a visualization of discordant paired-end reads
 #' alignments.
@@ -8,23 +8,48 @@ PE_LANES_PER_SAMPLE <- 15
 #' @param x A [`pe_mat`][query()] object.
 #' @returns A `pe_plotter` object.
 #' @export
+#'
+#' @examples
+#' pe_path <- system.file("extdata", "example.PE.txt.gz", package = "gorilla", mustWork = TRUE)
+#' pe <- pe_file(pe_path)
+#' mat <- query(pe, "chr16", 28743149, 28745149)
+#' plotter <- pe_plotter(mat)
 pe_plotter <- function(x) {
     new_pe_plotter(x)
 }
 
-#' Plot a `pe_plotter` object.
+#' Plot a `pe_plotter` object
 #'
-#' @param x A [`pe_plotter`] object.
-#' @param y Kept for compatability with generic, but ignored here.
+#' The `plot()` method for `pe_plotter`.
+#'
+#' The only additional parameter that is accepted is `col`, which should be a
+#' string or a character vector equal to the length of `samples` giving the
+#' colors to use for each sample.
+#'
+#' @param x A [`pe_plotter`][pe_plotter()] object.
+#' @param y Ignored.
 #' @param samples Samples to plot. The samples will be plotted from top to
 #'   bottom in the order they are given.
-#' @param ... Other plotting parameters. Currently the only accepted parameter
-#'   is `col` which should either be a character vector of length 1 or length
-#'   equal to `samples` giving the colors to use for each sample.
+#' @param main Title for the plot.
+#' @param col Color(s) to use for `samples`. Either a string or a character
+#'   vector of hexadecimal colors equal to the length of `samples`
+#' @param ... Ignored.
 #' @name plot.pe_plotter
 #' @export
-plot.pe_plotter <- function(x, y, samples, ...) {
+#'
+#' @examples
+#' pe_path <- system.file("extdata", "example.PE.txt.gz", package = "gorilla", mustWork = TRUE)
+#' pe <- pe_file(pe_path)
+#' mat <- query(pe, "chr16", 28743149, 28745149)
+#' plotter <- pe_plotter(mat)
+#' plot(plotter, samples = "gorilla0003")
+plot.pe_plotter <- function(x, y, samples, main = "", col = "#000000", ...) {
     stopifnot(is.character(samples) && length(samples) > 0)
+    stopifnot(is_string(main))
+    stopifnot(
+        is.character(col) &&
+            (length(col) == 1 || length(col) == length(samples))
+    )
 
     lanes <- length(samples) * PE_LANES_PER_SAMPLE
     plot(
@@ -35,14 +60,11 @@ plot.pe_plotter <- function(x, y, samples, ...) {
         xlab = "",
         xaxs = "i",
         xaxt = "n",
-        yaxt = "n"
+        yaxt = "n",
+        main = main
     )
 
-    col <- tryCatch(
-        color_from_dots(length(samples), ...),
-        value_error = function(e) stop("length of `col` must be 1 or equal to length of `samples`")
-    )
-
+    col <- if (length(col) == 1) rep(col, length(sample)) else col
     for (i in seq_along(samples)) {
         target <- x$mat[samples[[i]], nomatch = NULL]
         rcontig <- NULL
@@ -63,7 +85,11 @@ new_pe_plotter <- function(x) {
 
     rcontig <- NULL
     mcontig <- NULL
-    mat <- x$mat[rcontig == mcontig & rstart >= x$region$start & mstart <= x$region$end, ]
+    rstart <- NULL
+    mstart <- NULL
+    mat <- x$mat[
+        rcontig == mcontig & rstart >= x$region$start & mstart <= x$region$end,
+    ]
     set_pe_arrow_widths(mat, x$region)
 
     structure(list(mat = mat, region = x$region), class = "pe_plotter")
@@ -99,18 +125,29 @@ draw_sample_pe <- function(x, y, color) {
 
 set_pe_arrow_widths <- function(x, region) {
     arrow_len <- (region$end - region$start + 1) * 0.01
+    rcontig <- NULL
+    mcontig <- NULL
     rstart <- NULL
     mstart <- NULL
     rstrand <- NULL
     mstrand <- NULL
-    x[, c("rarrstart", "marrstart") := list(
-        rstart + ifelse(rstrand == "+", -..arrow_len, ..arrow_len),
-        mstart + ifelse(mstrand == "+", -..arrow_len, ..arrow_len)
-    )]
-    x[rcontig == mcontig, c("pe_start", "pe_end") := list(
-        pmin(rstart, rarrstart),
-        pmax(mstart, marrstart)
-    )]
+    rarrstart <- NULL
+    marrstart <- NULL
+    ..arrow_len <- NULL
+
+    x[,
+        c("rarrstart", "marrstart") := list(
+            rstart + ifelse(rstrand == "+", -..arrow_len, ..arrow_len),
+            mstart + ifelse(mstrand == "+", -..arrow_len, ..arrow_len)
+        )
+    ]
+    x[
+        rcontig == mcontig,
+        c("pe_start", "pe_end") := list(
+            pmin(rstart, rarrstart),
+            pmax(mstart, marrstart)
+        )
+    ]
 
     x
 }

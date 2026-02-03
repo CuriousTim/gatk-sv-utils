@@ -2,25 +2,29 @@
 % Please edit documentation in R/svevidence.R
 \name{svevidence}
 \alias{svevidence}
-\title{Create a new \code{svevidence} object.}
+\title{Create a new \code{svevidence} object}
 \usage{
-svevidence(contig, start, end, pe, sr, rd, pad = 0)
+svevidence(contig, start, end, pe, sr, rd, svtype, pad = 0)
 }
 \arguments{
-\item{contig}{The contig containing the region.}
+\item{contig}{A string. The contig containing the region.}
 
 \item{start}{The start of the region (1-start).}
 
 \item{end}{The end of the region (inclusive).}
 
-\item{pe}{A \code{\link{pe_file}} object for the discordant read pairs evidence.}
+\item{pe}{A \code{\link[=svevidencefiles]{pe_file}} object for the discordant read
+pairs evidence.}
 
-\item{sr}{A \code{\link{sr_file}} object for the split read evidence.}
+\item{sr}{A \code{\link[=svevidencefiles]{sr_file}} object for the split read evidence.}
 
-\item{rd}{A \code{\link{rd_file}} object for the read depth evidence.}
+\item{rd}{A \code{\link[=svevidencefiles]{rd_file}} object for the read depth evidence.}
 
-\item{pad}{Fraction of region to add as padding. The minimum padded start is
-1 and the maximum padded end is 536870912.}
+\item{svtype}{SV type of the variant.}
+
+\item{pad}{Fraction of region to add as padding when extracting the evidence
+in the region. The minimum padded start is 1 and the maximum padded end
+is 536870912.}
 }
 \value{
 A \code{svevidence} object.
@@ -28,4 +32,37 @@ A \code{svevidence} object.
 \description{
 This class represents SV evidence over a genomic region. It is assumed that
 the evidence sources all have the same set of samples.
+}
+\examples{
+pe_path <- system.file(
+    "extdata",
+    "example.PE.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+sr_path <- system.file(
+    "extdata",
+    "example.SR.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+rd_path <- system.file(
+    "extdata",
+    "example.RD.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+medians_path <- system.file(
+    "extdata",
+    "example_medianCov.txt",
+    package = "gorilla",
+    mustWork = TRUE
+)
+rd_medians <- read_median_coverages(medians_path)
+
+pe <- pe_file(pe_path)
+sr <- sr_file(sr_path)
+rd <- rd_file(rd_path, rd_medians)
+
+sv <- svevidence("chr16", 28743149, 28745149, pe, sr, rd, "DUP")
 }

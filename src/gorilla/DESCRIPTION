@@ -15,7 +15,6 @@ Imports:
     GenomicRanges (>= 1.62.0),
     IRanges (>= 2.43.6),
     matrixStats (>= 1.5.0),
-    methods,
     Rsamtools (>= 2.26.0),
     S4Vectors (>= 0.48.0),
     stats,

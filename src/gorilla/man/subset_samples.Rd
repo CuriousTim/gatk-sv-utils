@@ -7,7 +7,7 @@
 \alias{subset_samples.sr_mat}
 \alias{subset_samples}
 \alias{subset_samples.svevidence}
-\title{Subset an object to some samples.}
+\title{Subset an object to some samples}
 \usage{
 \method{subset_samples}{pe_mat}(x, samples)
 
@@ -36,4 +36,10 @@ subset. Methods should ignore samples in \code{samples} that are not present in
 \code{x}.
 
 There are methods for \code{pe_mat}, \code{sr_mat}, \code{rd_mat}, and \code{svevidence}.
+}
+\examples{
+pe_path <- system.file("extdata", "example.PE.txt.gz", package = "gorilla", mustWork = TRUE)
+pe <- pe_file(pe_path)
+mat <- query(pe, "chr16", 28743149, 28747149)
+mat_sub <- subset_samples(mat, c("gorilla0001", "gorilla0002"))
 }

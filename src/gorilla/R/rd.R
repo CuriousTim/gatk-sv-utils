@@ -1,12 +1,7 @@
-#' Create a new `rd_file` object.
-#'
-#' @param x Path to the RD matrix file.
-#' @param medians Named numeric vector of median coverage values of samples in
-#'   the RD matrix file. See [read_median_coverages()].
-#' @returns A `rd_file` object.
+#' @rdname svevidencefiles
 #' @export
-rd_file <- function(x, medians) {
-    new_rd_file(x, medians)
+rd_file <- function(path, medians) {
+    new_rd_file(path, medians)
 }
 
 #' @export
@@ -37,7 +32,7 @@ query.rd_file <- function(x, contig, start, end) {
             results$chr,
             IRanges::IRanges(results$start + 1L, results$end)
         )
-        mat <- normalize_bincov(mat, x$medians)
+        mat <- normalize_rd(mat, x$medians)
     } else {
         ranges <- GenomicRanges::GRanges()
     }
@@ -80,12 +75,7 @@ print.rd_mat <- function(x, ...) {
     cat(sprintf("samples: %d\n", ncol(x$mat)))
 }
 
-smooth <- function(x, n) {
-    UseMethod("smooth")
-}
-
-#' @export
-smooth.rd_mat <- function(x, n) {
+smooth_rd <- function(x, n) {
     mat <- x$mat
     if (nrow(x$mat) >= n) {
         mat <- apply(mat, 2, \(y) stats::runmed(y, n, na.action = "fail"))
@@ -143,6 +133,6 @@ check_rd_medians <- function(header, medians) {
 
 # Normalize the raw RD values by dividing by the median coverage
 # across the genome.
-normalize_bincov <- function(x, medians) {
+normalize_rd <- function(x, medians) {
     scale(x, FALSE, medians)
 }

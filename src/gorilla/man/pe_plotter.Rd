@@ -2,7 +2,7 @@
 % Please edit documentation in R/pe_plotter.R
 \name{pe_plotter}
 \alias{pe_plotter}
-\title{Create a new \code{pe_plotter} object.}
+\title{Create a new \code{pe_plotter} object}
 \usage{
 pe_plotter(x)
 }
@@ -15,4 +15,10 @@ A \code{pe_plotter} object.
 \description{
 A \code{pe_plotter} can create a visualization of discordant paired-end reads
 alignments.
+}
+\examples{
+pe_path <- system.file("extdata", "example.PE.txt.gz", package = "gorilla", mustWork = TRUE)
+pe <- pe_file(pe_path)
+mat <- query(pe, "chr16", 28743149, 28745149)
+plotter <- pe_plotter(mat)
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/sr_plotter.R
 \name{sr_plotter}
 \alias{sr_plotter}
-\title{Create a new \code{sr_plotter} object.}
+\title{Create a new \code{sr_plotter} object}
 \usage{
 sr_plotter(x)
 }
@@ -14,4 +14,10 @@ A \code{sr_plotter} object.
 }
 \description{
 A \code{sr_plotter} can create a visualization of split read alignments.
+}
+\examples{
+sr_path <- system.file("extdata", "example.SR.txt.gz", package = "gorilla", mustWork = TRUE)
+sr <- sr_file(sr_path)
+mat <- query(sr, "chr16", 28743149, 28745149)
+plotter <- sr_plotter(mat)
 }

@@ -9,9 +9,9 @@ GDTABLE_REQ_HEADER <- c(
     "cluster"
 )
 
-#' Read genomic disorders table file.
+#' Read a genomic disorders table file
 #'
-#' Reads a TSV file describing genomic disorder regions.
+#' Read a TSV file describing genomic disorder regions.
 #'
 #' The file must have the following columns:
 #' 1. chr: contig of the region
@@ -26,8 +26,20 @@ GDTABLE_REQ_HEADER <- c(
 #' The file must have column headers as given.
 #'
 #' @param path Path to the file.
-#' @returns A `data.table`.
+#' @returns A [`data.table`][data.table::data.table].
 #' @export
+#'
+#' @examples
+#' tmp <- tempfile()
+#' fp <- file(tmp, open = "wt")
+#' writeLines(
+#'     "chr\tstart_GRCh38\tend_GRCh38\tGD_ID\tsvtype\tNAHR\tterminal\tcluster",
+#'     fp
+#' )
+#' writeLines("chr1\t898703\t6229913\tGD_0000\tDUP\tno\tp\t", fp)
+#' writeLines("chr15\t31727418\t32153204\tGD_0001\tDEL\tyes\tno\tcluster00", fp)
+#' close(fp)
+#' gds <- read_gdtable(tmp)
 read_gdtable <- function(path) {
     tmp <- data.table::fread(
         path,
@@ -46,6 +58,7 @@ read_gdtable <- function(path) {
             "character"
         )
     )
+
     if (!identical(colnames(tmp), GDTABLE_REQ_HEADER)) {
         stop(sprintf(
             "genomic disorder regions table must have header: '%s'",
@@ -67,23 +80,37 @@ read_gdtable <- function(path) {
     tmp
 }
 
-#' Expand genomic disorder regions.
+#' Expand genomic disorder regions
 #'
-#' Expand each genomic disorder region by some fraction of its size.
+#' Expand the regions in a `data.table` of genomic disorder regions.
 #'
 #' The start of the expanded region will not be less than 1 and the end of the
-#' region will not be greater than 5536870912.
+#' region will not be greater than 5536870912. The object is modified in place.
 #'
-#' @param x A `data.table` produced by [`read_gdtable`][read_gdtable()].
+#' @param x A `data.table` produced by [read_gdtable()].
 #' @param prop The fraction of each region by which to expand it.
 #' @returns A `data.table` with columns `qstart` and `qend` with the expanded
-#'   start and end.
+#'   start and end, invisibly.
 #' @export
+#'
+#' @examples
+#' tmp <- tempfile()
+#' fp <- file(tmp, open = "wt")
+#' writeLines(
+#'     "chr\tstart_GRCh38\tend_GRCh38\tGD_ID\tsvtype\tNAHR\tterminal\tcluster",
+#'     fp
+#' )
+#' writeLines("chr1\t898703\t6229913\tGD_0000\tDUP\tno\tp\t", fp)
+#' writeLines("chr15\t31727418\t32153204\tGD_0001\tDEL\tyes\tno\tcluster00", fp)
+#' close(fp)
+#'
+#' gds <- read_gdtable(tmp)
+#' expanded_gds <- expand_gdtable(gds, 0.2)
 expand_gdtable <- function(x, prop) {
     start_GRCh38 <- NULL
     end_GRCh38 <- NULL
 
-    pad_size <- ceiling((x$end_GRCh38 - x$start_GRCh38 + 1L) * prop)
+    pad_size <- ceiling((x[["end_GRCh38"]] - x[["start_GRCh38"]] + 1L) * prop)
     x[,
         c("qstart", "qend") := list(
             pmax(1L, start_GRCh38 - pad_size),

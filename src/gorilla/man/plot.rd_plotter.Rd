@@ -2,24 +2,53 @@
 % Please edit documentation in R/rd_plotter.R
 \name{plot.rd_plotter}
 \alias{plot.rd_plotter}
-\title{Plot a \code{rd_plotter} object.}
+\title{Plot a \code{rd_plotter} object}
 \usage{
-\method{plot}{rd_plotter}(x, y, samples, bg_samples = NULL, ...)
+\method{plot}{rd_plotter}(x, y, samples, bg_samples = NULL, main = "", col = "#000000", ...)
 }
 \arguments{
-\item{x}{A \code{\link{rd_plotter}} object.}
+\item{x}{A \code{\link[=rd_plotter]{rd_plotter}} object.}
 
-\item{y}{Kept for compatability with generic, but ignored here.}
+\item{y}{Ignored.}
 
 \item{samples}{Samples to plot.}
 
 \item{bg_samples}{Samples to use as background samples. If \code{NULL},
 background samples are not included.}
 
-\item{...}{Other plotting parameters. Currently the only accepted parameter
-is \code{col} which should either be a character vector of length 1 or length
-equal to \code{samples} giving the colors to use for each sample.}
+\item{main}{Title for the plot. Use \code{NULL} to omit.}
+
+\item{col}{Color(s) to use for \code{samples}. Either a string or a character
+vector of hexadecimal colors equal to the length of \code{samples}}
+
+\item{...}{Ignored.}
 }
 \description{
-Plot a \code{rd_plotter} object.
+The \code{plot()} method for \code{rd_plotter}.
+}
+\details{
+The only additional parameter that is accepted is \code{col}, which should be a
+string or a character vector equal to the length of \code{samples} giving the
+colors to use for each sample.
+}
+\examples{
+rd_path <- system.file(
+    "extdata",
+    "example.RD.txt.gz",
+    package = "gorilla",
+    mustWork = TRUE
+)
+medians_path <- system.file(
+    "extdata",
+    "example_medianCov.txt",
+    package = "gorilla",
+    mustWork = TRUE
+)
+
+rd_medians <- read_median_coverages(medians_path)
+
+rd <- rd_file(rd_path, rd_medians)
+mat <- query(rd, "chr16", 28743149, 28745149)
+plotter <- rd_plotter(mat)
+plot(plotter, samples = c("gorilla0000", "gorilla0001"))
 }

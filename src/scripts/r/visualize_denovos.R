@@ -39,7 +39,7 @@ variants <- fread(
 pedigree <- fread(
     argv[[2]],
     header = FALSE,
-    sep = "\t"
+    sep = "\t",
     colClasses = c(
         "character",
         "character",
@@ -55,7 +55,7 @@ pedigree <- fread(
         "maternal_id",
         "sex",
         "phenotype"
-    )
+    ),
     key = "sample_id"
 )
 
@@ -72,7 +72,7 @@ for (i in seq_len(nrow(variants))) {
     }
 
     if (!v$sample_id %in% names(rd_medians)) {
-        stop(sprintf("sample %s is not in given batch evidence", v$sample_id)) {
+        stop(sprintf("sample %s is not in given batch evidence", v$sample_id))
     }
 
     if (!fam$paternal_id %in% names(rd_medians)) {

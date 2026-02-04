@@ -281,7 +281,7 @@ task MergePlotsTars {
   runtime {
     bootDiskSizeGb: 8
     cpu: 1
-    disks: "local-disk jHDD"
+    disks: "local-disk ${ceil(disk_size)} HDD"
     docker: base_docker
     maxRetries: 1
     memory: "2 GiB"

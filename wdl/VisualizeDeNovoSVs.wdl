@@ -277,7 +277,7 @@ task MergePlotsTars {
   }
 
   output {
-    File merged_plots_tar = "${merged_tar_prefix}"
+    File merged_plots_tar = "${merged_tar_prefix}.tar"
   }
 
   Float disk_size = size(plots_tars, "GB") * 3 + 16

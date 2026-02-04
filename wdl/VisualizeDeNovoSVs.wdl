@@ -48,6 +48,7 @@ workflow VisualizeDeNovoSVs {
           merged_sr_index = merged_sr_index[i],
           merged_bincov = merged_bincov[i],
           merged_bincov_index = merged_bincov_index[i],
+          sequence_dict = sequence_dict,
           gatk_docker = gatk_docker
       }
 
@@ -224,7 +225,6 @@ task MakePlots {
     File merged_bincov
     File merged_bincov_index
     File median_cov
-    File sequence_dict
     String sample_set_id
     String r_docker
   }
@@ -256,7 +256,6 @@ task MakePlots {
     merged_bincov="~{merged_bincov}"
     median_cov="~{median_cov}"
     sample_set_id="~{sample_set_id}"
-    sequence_dict="~{sequence_dict}"
 
     Rscript /opt/gatk-sv-utils/script/visualize_denovos.R \
       "${variants}" pe.txt.gz sr.txt.gz rd.txt.gz \

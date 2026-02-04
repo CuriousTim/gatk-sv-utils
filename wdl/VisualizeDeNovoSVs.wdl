@@ -63,6 +63,7 @@ workflow VisualizeDeNovoSVs {
           merged_bincov_index = SubsetEvidence.subset_bincov_index,
           median_cov = median_cov[i],
           sample_set_id = sample_set_id[i],
+          pedigree = pedigree,
           r_docker = r_docker
       }
     }
@@ -226,6 +227,7 @@ task MakePlots {
     File merged_bincov_index
     File median_cov
     String sample_set_id
+    File pedigree
     String r_docker
   }
 
@@ -256,9 +258,10 @@ task MakePlots {
     merged_bincov="~{merged_bincov}"
     median_cov="~{median_cov}"
     sample_set_id="~{sample_set_id}"
+    pedigree="~{pedigree}"
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_denovos.R \
-      "${variants}" pe.txt.gz sr.txt.gz rd.txt.gz \
+      "${variants}" "${pedigree}" pe.txt.gz sr.txt.gz rd.txt.gz \
       "${median_cov}" "${sample_set_id}"
 
     tar -cf "${sample_set_id}.tar" "${sample_set_id}"

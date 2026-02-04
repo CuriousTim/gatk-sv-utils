@@ -257,7 +257,7 @@ task MakePlots {
     median_cov="~{median_cov}"
     sample_set_id="~{sample_set_id}"
 
-    Rscript /opt/gatk-sv-utils/script/visualize_denovos.R \
+    Rscript /opt/gatk-sv-utils/scripts/visualize_denovos.R \
       "${variants}" pe.txt.gz sr.txt.gz rd.txt.gz \
       "${median_cov}" "${sample_set_id}"
 

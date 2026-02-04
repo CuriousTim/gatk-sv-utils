@@ -262,8 +262,9 @@ task MakePlots {
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_denovos.R \
       "${variants}" "${pedigree}" "${merged_pe}" "${merged_sr}" "${merged_bincov}" \
-      "${median_cov}" "${sample_set_id}"
+      "${median_cov}" "${sample_set_id}" exclusions.tsv
 
+    mv exclusions.tsv "${sample_set_id}/exclusions.tsv"
     tar -cf "${sample_set_id}.tar" "${sample_set_id}"
   >>>
 }

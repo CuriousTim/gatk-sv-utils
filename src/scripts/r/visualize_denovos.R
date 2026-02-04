@@ -4,7 +4,11 @@
 # in the same batch.
 #
 # Usage:
-# Rscript visualize_denovos.R <variants> <pedigree> <pe> <sr> <rd> <median_cov> <outdir>
+# Rscript visualize_denovos.R <variants> <pedigree> <pe> <sr> <rd> <median_cov> <outdir> <exclusions>
+
+nzchar2 <- function(x) {
+    !is.na(x) && !nzchar(x)
+}
 
 argv <- commandArgs(trailingOnly = TRUE)
 
@@ -63,36 +67,42 @@ pe <- pe_file(argv[[3]])
 sr <- sr_file(argv[[4]])
 rd_medians <- read_median_coverages(argv[[6]])
 rd <- rd_file(argv[[5]], rd_medians)
+exclusions_fp <- file(argv[[8]], open = "wt")
+writeLines("sample_id\tvid\texclusion_reason", exclusions_fp)
 
 for (i in seq_len(nrow(variants))) {
     v <- variants[i, ]
     fam <- pedigree[v$sample_id, ]
-    if (!nzchar(fam$paternal_id) || !nzchar(fam$maternal_id)) {
-        stop(sprintf("sample %s has missing parents in pedigree", v$sample_id))
+    if (!nzchar2(fam$paternal_id) || !nzchar2(fam$maternal_id)) {
+        writeLines(
+            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "parents missing from pedigree"),
+            exclusions_fp
+        )
+        next
     }
 
     if (!v$sample_id %in% names(rd_medians)) {
-        stop(sprintf("sample %s is not in given batch evidence", v$sample_id))
+        writeLines(
+            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "sample missing from evidence"),
+            exclusions_fp
+        )
+        next
     }
 
     if (!fam$paternal_id %in% names(rd_medians)) {
-        stop(
-            sprintf(
-                "father missing from batch evidence (sample = %s, father = %s)",
-                v$sample_id,
-                fam$paternal_id
-            )
+        writeLines(
+            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "father missing from evidence"),
+            exclusions_fp
         )
+        next
     }
 
     if (!fam$maternal_id %in% names(rd_medians)) {
-        stop(
-            sprintf(
-                "mother missing from batch evidence (sample = %s, mother = %s)",
-                v$sample_id,
-                fam$maternal_id
-            )
+        writeLines(
+            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "mother missing from evidence"),
+            exclusions_fp
         )
+        next
     }
 
     sve <- svevidence(v$chr, v$start, v$end, pe, sr, rd, v$svtype, pad = 0.3)
@@ -103,3 +113,5 @@ for (i in seq_len(nrow(variants))) {
     plot(plotter)
     dev.off()
 }
+
+close(exclusions_fp)

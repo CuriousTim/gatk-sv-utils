@@ -261,7 +261,7 @@ task MakePlots {
     pedigree="~{pedigree}"
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_denovos.R \
-      "${variants}" "${pedigree}" pe.txt.gz sr.txt.gz rd.txt.gz \
+      "${variants}" "${pedigree}" "${merged_pe}" "${merged_sr}" "${merged_bincov}" \
       "${median_cov}" "${sample_set_id}"
 
     tar -cf "${sample_set_id}.tar" "${sample_set_id}"

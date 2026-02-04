@@ -105,7 +105,19 @@ for (i in seq_len(nrow(variants))) {
         next
     }
 
-    sve <- svevidence(v$chr, v$start, v$end, pe, sr, rd, v$svtype, pad = 0.3)
+    sve <- tryCatch(
+        svevidence(v$chr, v$start, v$end, pe, sr, rd, v$svtype, pad = 0.3),
+        scanTabix_io = function(e) {
+            writeLines(
+                sprintf("%s\t%s\t%s", v$sample_id, v$vid, "error querying evidence files"),
+                exclusions_fp
+            )
+            NULL
+        }
+    )
+    if (is.null(sve)) {
+        next
+    }
     trio <- svtrio(sve, fam$sample_id, fam$paternal_id, fam$maternal_id)
     plotter <- denovo_plotter(trio)
     plot_path <- file.path(argv[[7]], sprintf("%s~~%s.png", v$vid, v$sample_id))

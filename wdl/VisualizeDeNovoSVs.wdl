@@ -191,7 +191,7 @@ task SubsetEvidence {
 
     # expand all ranges by 50% upstream and downstream so the visualizations
     # can have padding
-    awk -F'\t' 'BEGIN{OFMT="%.0f"}{size=$3-$2+1;pad=size / 2;a=$2-pad;b=$3+pad;a=a<1?1:a;print $1"\t"a-1"\t"b}' \
+    awk -F'\t' '{size=$3-$2+1;pad=int(size / 2);pad=pad<1?1:pad;a=$2-pad;b=$3+pad;a=a<1?1:a;printf "%s\t%.0f\t%.0f\n", $1,a-1,b}' \
       "${variants}" > padded_coords.bed
 
     gatk --java-options "-Xmx6G" PrintSVEvidence \

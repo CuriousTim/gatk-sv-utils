@@ -22,6 +22,7 @@ workflow VisualizeDeNovoSVs {
 
     String base_docker
     String gatk_docker
+    String r_docker
   }
 
   output {
@@ -38,7 +39,7 @@ workflow VisualizeDeNovoSVs {
 
   scatter (i in range(length(BatchVariants.batched_variants))) {
     if (size(BatchVariants.batched_variants[i]) > 0) {
-      call MakePlots {
+      call SubsetEvidence {
         input:
           variants = BatchVariants.batched_variants[i],
           merged_pe = merged_pe[i],
@@ -47,10 +48,21 @@ workflow VisualizeDeNovoSVs {
           merged_sr_index = merged_sr_index[i],
           merged_bincov = merged_bincov[i],
           merged_bincov_index = merged_bincov_index[i],
-          median_cov = median_cov[i],
-          sequence_dict = sequence_dict,
-          sample_set_id = sample_set_id[i],
           gatk_docker = gatk_docker
+      }
+
+      call MakePlots {
+        input:
+          variants = BatchVariants.batched_variants[i],
+          merged_pe = SubsetEvidence.subset_pe,
+          merged_pe_index = SubsetEvidence.subset_pe_index,
+          merged_sr = SubsetEvidence.subset_sr,
+          merged_sr_index = SubsetEvidence.subset_sr_index,
+          merged_bincov = SubsetEvidence.subset_bincov,
+          merged_bincov_index = SubsetEvidence.subset_bincov_index,
+          median_cov = median_cov[i],
+          sample_set_id = sample_set_id[i],
+          r_docker = r_docker
       }
     }
   }
@@ -118,7 +130,7 @@ task BatchVariants {
   >>>
 }
 
-task MakePlots {
+task SubsetEvidence {
   input {
     File variants
     File merged_pe
@@ -127,9 +139,7 @@ task MakePlots {
     File merged_sr_index
     File merged_bincov
     File merged_bincov_index
-    File median_cov
     File sequence_dict
-    String sample_set_id
     String gatk_docker
   }
 
@@ -149,14 +159,87 @@ task MakePlots {
   }
 
   output {
-    File plots_tar = "${sample_set_id}.tar"
+    File subset_pe = "subset.PE.txt.gz"
+    File subset_pe_index = "subset.PE.txt.gz.tbi"
+    File subset_sr = "subset.SR.txt.gz"
+    File subset_sr_index = "subset.SR.txt.gz.tbi"
+    File subset_bincov = "subset.RD.txt.gz"
+    File subset_bincov_index = "subset.RD.txt.gz.tbi"
   }
 
   runtime {
     bootDiskSizeGb: 8
-    cpu: 2
-    disks: "local-disk 128 HDD"
+    cpu: 4
+    disks: "local-disk 256 HDD"
     docker: gatk_docker
+    maxRetries: 1
+    memory: "16 GiB"
+    preemptible: 3
+  }
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    variants="~{variants}"
+    merged_pe="~{merged_pe}"
+    merged_sr="~{merged_sr}"
+    merged_bincov="~{merged_bincov}"
+    sequence_dict="~{sequence_dict}"
+
+    # expand all ranges by 50% upstream and downstream so the visualizations
+    # can have padding
+    awk -F'\t' '{size=$3-$2+1;pad=size / 2;a=$2-pad;b=$3+pad;a=a<1?1:a;print $1"\t"a-1"\t"b}' \
+      "${variants}" > padded_coords.bed
+
+    gatk --java-options "Xmx6G" PrintSVEvidence \
+      --evidence-file  "${merged_pe}" \
+      --interval-merging-rule ALL \
+      --intervals padded_coords.bed \
+      --sequence-dictionary "${sequence_dict}" \
+      --output "subset.PE.txt.gz"
+    gatk --java-options "Xmx6G" PrintSVEvidence \
+      --evidence-file  "${merged_sr}" \
+      --interval-merging-rule ALL \
+      --intervals padded_coords.bed \
+      --sequence-dictionary "${sequence_dict}" \
+      --output "subset.SR.txt.gz"
+    gatk --java-options "Xmx6G" PrintSVEvidence \
+      --evidence-file  "${merged_bincov}" \
+      --interval-merging-rule ALL \
+      --intervals padded_coords.bed \
+      --sequence-dictionary "${sequence_dict}" \
+      --output "subset.RD.txt.gz"
+  >>>
+}
+
+task MakePlots {
+  input {
+    File variants
+    File merged_pe
+    File merged_pe_index
+    File merged_sr
+    File merged_sr_index
+    File merged_bincov
+    File merged_bincov_index
+    File median_cov
+    File sequence_dict
+    String sample_set_id
+    String r_docker
+  }
+
+  output {
+    File plots_tar = "${sample_set_id}.tar"
+  }
+
+  Float disk_size = size([merged_pe, merged_sr, merged_bincov, median_cov], "GB") * 1.5 + 32
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpu: 2
+    disks: "local-disk ${ceil(disk_size)} HDD"
+    docker: r_docker
     maxRetries: 1
     memory: "8 GiB"
     preemptible: 3
@@ -174,28 +257,6 @@ task MakePlots {
     median_cov="~{median_cov}"
     sample_set_id="~{sample_set_id}"
     sequence_dict="~{sequence_dict}"
-
-    awk -F'\t' '{size=$3-$2+1;pad=size / 2;a=$2-pad;b=$3+pad;a=a<1?1:a;print $1"\t"a-1"\t"b}' \
-      "${variants}" > padded_coords.bed
-
-    gatk --java-options "Xmx4G" PrintSVEvidence \
-      --evidence-file  "${merged_pe}" \
-      --interval-merging-rule ALL \
-      --intervals padded_coords.bed \
-      --sequence-dictionary "${sequence_dict}" \
-      --output "pe.txt.gz"
-    gatk --java-options "Xmx4G" PrintSVEvidence \
-      --evidence-file  "${merged_sr}" \
-      --interval-merging-rule ALL \
-      --intervals padded_coords.bed \
-      --sequence-dictionary "${sequence_dict}" \
-      --output "sr.txt.gz"
-    gatk --java-options "Xmx4G" PrintSVEvidence \
-      --evidence-file  "${merged_bincov}" \
-      --interval-merging-rule ALL \
-      --intervals padded_coords.bed \
-      --sequence-dictionary "${sequence_dict}" \
-      --output "rd.txt.gz"
 
     Rscript /opt/gatk-sv-utils/script/visualize_denovos.R \
       "${variants}" pe.txt.gz sr.txt.gz rd.txt.gz \

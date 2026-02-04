@@ -112,7 +112,7 @@ task BatchVariants {
     mkdir batches
     gawk -F'\t' '
       ARGIND == 1 {
-        path = sprintf("%06d.tsv", FNR)
+        path = sprintf("batches/%06d.tsv", FNR)
         printf "" > path
         outpaths[$1] = path
       }

@@ -72,7 +72,16 @@ writeLines("sample_id\tvid\texclusion_reason", exclusions_fp)
 
 for (i in seq_len(nrow(variants))) {
     v <- variants[i, ]
-    fam <- pedigree[v$sample_id, ]
+    fam <- pedigree[v$sample_id, nomatch = NULL]
+
+    if (nrow(fam) == 0) {
+        writeLines(
+            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "sample missing from pedigree"),
+            exclusions_fp
+        )
+        next
+    }
+
     if (!nzchar2(fam$paternal_id) || !nzchar2(fam$maternal_id)) {
         writeLines(
             sprintf("%s\t%s\t%s", v$sample_id, v$vid, "parents missing from pedigree"),

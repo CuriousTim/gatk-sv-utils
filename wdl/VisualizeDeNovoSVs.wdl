@@ -194,19 +194,19 @@ task SubsetEvidence {
     awk -F'\t' '{size=$3-$2+1;pad=size / 2;a=$2-pad;b=$3+pad;a=a<1?1:a;print $1"\t"a-1"\t"b}' \
       "${variants}" > padded_coords.bed
 
-    gatk --java-options "Xmx6G" PrintSVEvidence \
+    gatk --java-options "-Xmx6G" PrintSVEvidence \
       --evidence-file  "${merged_pe}" \
       --interval-merging-rule ALL \
       --intervals padded_coords.bed \
       --sequence-dictionary "${sequence_dict}" \
       --output "subset.PE.txt.gz"
-    gatk --java-options "Xmx6G" PrintSVEvidence \
+    gatk --java-options "-Xmx6G" PrintSVEvidence \
       --evidence-file  "${merged_sr}" \
       --interval-merging-rule ALL \
       --intervals padded_coords.bed \
       --sequence-dictionary "${sequence_dict}" \
       --output "subset.SR.txt.gz"
-    gatk --java-options "Xmx6G" PrintSVEvidence \
+    gatk --java-options "-Xmx6G" PrintSVEvidence \
       --evidence-file  "${merged_bincov}" \
       --interval-merging-rule ALL \
       --intervals padded_coords.bed \

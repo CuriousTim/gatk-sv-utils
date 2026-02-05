@@ -190,10 +190,15 @@ task SubsetEvidence {
     merged_bincov="~{merged_bincov}"
     sequence_dict="~{sequence_dict}"
 
+    awk -F'\t' '/^@SQ/{sub(/^SN:/, "", $2); sub(/^LN:/, "", $3); print $2,$3}' \
+      OFS='\t' "${sequence_dict}" > sequence_lengths.tsv
+
     # expand all ranges by 50% upstream and downstream so the visualizations
     # can have padding
-    awk -F'\t' '{size=$3-$2+1;pad=int(size / 2);pad=pad<1?1:pad;a=$2-pad;b=$3+pad;a=a<1?1:a;printf "%s\t%.0f\t%.0f\n", $1,a-1,b}' \
-      "${variants}" > padded_coords.bed
+    awk -F'\t' '{size=$3-$2+1;pad=int(size / 2);pad=pad<1?1:pad;print $1,$2-pad,$3+pad}' OFS='\t' \
+      "${variants}" \
+      | awk -F'\t' 'BEGIN{OFS="\t";OFMT="%.0f"}NR==FNR{a[$1]=$2}NR>FNR{$2=$2<=0?0:$2-1;$3=$3>a[$1]?a[$1]:$3;print}' \
+          sequence_lengths.tsv - > padded_coords.bed
 
     gatk --java-options "-Xmx6G" PrintSVEvidence \
       --evidence-file  "${merged_pe}" \

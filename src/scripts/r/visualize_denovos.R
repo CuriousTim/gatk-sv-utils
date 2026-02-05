@@ -7,7 +7,7 @@
 # Rscript visualize_denovos.R <variants> <pedigree> <pe> <sr> <rd> <median_cov> <outdir> <exclusions>
 
 nzchar2 <- function(x) {
-    !is.na(x) && !nzchar(x)
+    !is.na(x) && nzchar(x)
 }
 
 argv <- commandArgs(trailingOnly = TRUE)

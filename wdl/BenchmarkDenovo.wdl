@@ -20,6 +20,7 @@ workflow BenchmarkDenovo {
     File primary_contigs_fai
     File reference_dict
     File genomic_disorders_bed
+    File blacklist_bed
     File sr_bed
     File rm_bed
     File sd_bed
@@ -56,6 +57,7 @@ workflow BenchmarkDenovo {
     input:
       vcf = truth_vcf,
       gd_bed = genomic_disorders_bed,
+      bl_bed = blacklist_bed,
       base_docker = base_docker
   }
 
@@ -199,10 +201,11 @@ task FilterTruthVcf {
   input {
     File vcf
     File gd_bed
+    File bl_bed
     String base_docker
   }
 
-  Float disk_size = size(vcf, "GB") * 3 + 16
+  Float disk_size = size(vcf, "GB") * 3 + size([gd_bed, bl_bed], "GB") + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -221,16 +224,21 @@ task FilterTruthVcf {
     set -o nounset
     set -o pipefail
 
-    vcf="~{vcf}"
-    gd_bed="~{gd_bed}"
+    vcf='~{vcf}'
+    gd_bed='~{gd_bed}'
+    bl_bed='~{bl_bed}'
     filtered_truth_vcf='~{filtered_truth_vcf}'
 
     bcftools query --format '%CHROM\t%POS0\t%END\t%ID\n' \
-      | --include 'SVTYPE = "DEL" || SVTYPE = "DUP"' "${vcf}" > cnvs.bed
+      --include 'SVTYPE = "DEL" || SVTYPE = "DUP"' "${vcf}" > cnvs.bed
     bedtools intersect -a cnvs.bed -b "${gd_bed}" -r 0.5 -u \
-      | cut -f 4 > gd_fail
+      | cut -f 4 > blacklist
+    bcftools query --format '%CHROM\t%POS0\t%END\t%ID\n' "${vcf}" > sites.bed
 
-    bcftools view --exclude 'ID = @gd_fail || SVLEN >= 1000000' --output-type z \
+    bedtools coverage -a sites.bed -b bl_bed \
+      | awk -F'\t' '%8 >= 0.5 {print $4}' >> blacklist
+
+    bcftools view --exclude 'ID = @blacklist || SVLEN >= 1000000' --output-type z \
       --output "${filtered_truth_vcf}" --write-index=tbi "${vcf}"
   >>>
 

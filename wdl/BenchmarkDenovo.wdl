@@ -6,6 +6,7 @@ workflow BenchmarkDenovo {
     # See benchmark_denovo.R
     File denovos
     File sample_table
+    File pedigree
     # The "true" de novo calls
     File truth_vcf
     File truth_vcf_index
@@ -45,6 +46,7 @@ workflow BenchmarkDenovo {
     input:
       start_vcf = start_vcfs[0],
       truth_vcf = truth_vcf,
+      pedigree = pedigree,
       sample_table = sample_table,
       base_docker = base_docker
   }
@@ -137,10 +139,11 @@ task GetSharedSamples {
     File start_vcf
     File truth_vcf
     File sample_table
+    File pedigree
     String base_docker
   }
 
-  Float disk_size = size([start_vcf, truth_vcf, sample_table], "GB") * 2 + 16
+  Float disk_size = size([start_vcf, truth_vcf, sample_table, pedigree], "GB") * 2 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -160,13 +163,19 @@ task GetSharedSamples {
     start_vcf='~{start_vcf}'
     truth_vcf='~{truth_vcf}'
     sample_table='~{sample_table}'
+    pedigree='~{pedigree}'
 
     mv "${sample_table}" samples.tsv
     duckdb ':memory:' "COPY (SELECT DISTINCT \"entity:sample_id\" FROM 'samples.tsv' WHERE cohort_short = 'SSC') TO 'ssc' (HEADER false);"
     bcftools query --list-samples "${start_vcf}" | sort > start_samples
     bcftools query --list-samples "${truth_vcf}" | sort > truth_samples
-    comm -12 ssc start_samples > temp
-    comm -12 temp truth_samples > shared_samples.list
+
+    # filter by pedigree in case the starting VCF and pedigree are not in sync
+    awk -F'\t' '$2 && $3 && $4 {print $2}' "${pedigree}" \
+      sort > pedigree_samples
+    comm -12 ssc pedigree_samples > step1
+    comm -12 step1 start_samples > step2
+    comm -12 step2 truth_samples > shared_samples.list
     if [[ ! -s 'shared_samples.list' ]]; then
       printf 'Start VCF and truth VCF have 0 shared samples\n' >&2
       exit 1

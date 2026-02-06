@@ -19,6 +19,7 @@ workflow BenchmarkDenovo {
           "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX"]
     File primary_contigs_fai
     File reference_dict
+    File genomic_disorders_bed
     File sr_bed
     File rm_bed
     File sd_bed
@@ -51,6 +52,13 @@ workflow BenchmarkDenovo {
       base_docker = base_docker
   }
 
+  call FilterTruthVcf {
+    input:
+      vcf = truth_vcf,
+      gd_bed = genomic_disorders_bed,
+      base_docker = base_docker
+  }
+
   scatter (i in range(length(contigs))) {
     call SubsetVcf as subset_start {
       input:
@@ -64,8 +72,8 @@ workflow BenchmarkDenovo {
 
     call SubsetVcf as subset_truth {
       input:
-        vcf = truth_vcf,
-        vcf_index = truth_vcf_index,
+        vcf = FilterTruthVcf.filtered_vcf,
+        vcf_index = FilterTruthVcf.filtered_vcf_index,
         sample_ids = GetSharedSamples.shared_samples,
         contig = contigs[i],
         primary_contigs_fai = primary_contigs_fai,
@@ -184,6 +192,51 @@ task GetSharedSamples {
 
   output {
    File shared_samples = "shared_samples.list"
+  }
+}
+
+task FilterTruthVcf {
+  input {
+    File vcf
+    File gd_bed
+    String base_docker
+  }
+
+  Float disk_size = size(vcf, "GB") * 3 + 16
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk ${ceil(disk_size)} HDD"
+    docker: base_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  String filtered_truth_vcf = "filtered-${basename(vcf)}"
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    vcf="~{vcf}"
+    gd_bed="~{gd_bed}"
+    filtered_truth_vcf='~{filtered_truth_vcf}'
+
+    bcftools query --format '%CHROM\t%POS0\t%END\t%ID\n' \
+      | --include 'SVTYPE = "DEL" || SVTYPE = "DUP"' "${vcf}" > cnvs.bed
+    bedtools intersect -a cnvs.bed -b "${gd_bed}" -r 0.5 -u \
+      | cut -f 4 > gd_fail
+
+    bcftools view --exclude 'ID = @gd_fail || SVLEN >= 1000000' --output-type z \
+      --output "${filtered_truth_vcf}" --write-index=tbi "${vcf}"
+  >>>
+
+  output {
+    File filtered_vcf = filtered_truth_vcf
+    File filtered_vcf_index = "${filtered_truth_vcf}.tbi"
   }
 }
 

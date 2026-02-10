@@ -9,7 +9,7 @@ ARG HTSLIB_URI="https://github.com/samtools/htslib/releases/download/${HTSLIB_VE
 ARG BEDTOOLS_VERSION="2.31.1"
 ARG BEDTOOLS_URI="https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz"
 
-ARG DUCKDB_VERSION="1.4.0"
+ARG DUCKDB_VERSION="1.4.4"
 ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
 
 RUN apt-get update \

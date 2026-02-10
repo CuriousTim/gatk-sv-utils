@@ -181,7 +181,7 @@ task GetSharedSamples {
 
     # filter by pedigree in case the starting VCF and pedigree are not in sync
     awk -F'\t' '$2 && $3 && $4 {print $2}' "${pedigree}" \
-      sort > pedigree_samples
+      | sort > pedigree_samples
     comm -12 ssc pedigree_samples > step1
     comm -12 step1 start_samples > step2
     comm -12 step2 truth_samples > shared_samples.list

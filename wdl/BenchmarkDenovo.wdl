@@ -234,7 +234,7 @@ task FilterTruthVcf {
       | cut -f 4 > blacklist
     bcftools query --format '%CHROM\t%POS0\t%END\t%ID\n' "${vcf}" > sites.bed
 
-    bedtools coverage -a sites.bed -b bl_bed \
+    bedtools coverage -a sites.bed -b "${bl_bed}" \
       | awk -F'\t' '$8 >= 0.5 {print $4}' >> blacklist
 
     bcftools view --exclude 'ID = @blacklist || SVLEN >= 1000000' --output-type z \

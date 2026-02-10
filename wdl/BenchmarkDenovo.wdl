@@ -230,7 +230,7 @@ task FilterTruthVcf {
 
     bcftools query --format '%CHROM\t%POS0\t%END\t%ID\n' \
       --include 'SVTYPE = "DEL" || SVTYPE = "DUP"' "${vcf}" > cnvs.bed
-    bedtools intersect -a cnvs.bed -b "${gd_bed}" -r 0.5 -u \
+    bedtools intersect -a cnvs.bed -b "${gd_bed}" -r -f 0.5 -u \
       | cut -f 4 > blacklist
     bcftools query --format '%CHROM\t%POS0\t%END\t%ID\n' "${vcf}" > sites.bed
 

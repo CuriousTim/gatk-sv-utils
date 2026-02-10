@@ -24,7 +24,7 @@ workflow BenchmarkDenovo {
     File sr_bed
     File rm_bed
     File sd_bed
-    File gencode_gff
+    File pc_genes_bed
 
     Float small_cnv_reciprocal_ovp = 0.1
     Float small_cnv_size_sim = 0
@@ -119,26 +119,25 @@ workflow BenchmarkDenovo {
         truth_in_eval_vcf = SVConcordance.truth_in_eval_vcf,
         truth_in_start_vcf =  SVConcordance.truth_in_start_vcf,
         start_vcf = subset_start.for_concordance_vcf,
+        sr_bed = sr_bed,
+        rm_bed = rm_bed,
+        sd_bed = sd_bed,
+        pc_genes_bed = pc_genes_bed,
         base_docker = base_docker
     }
   }
 
   call MakePlots {
     input:
-      eval_in_truth_counts = CountConcordance.eval_in_truth_counts,
-      truth_in_eval_counts = CountConcordance.truth_in_eval_counts,
-      sr_bed = sr_bed,
-      rm_bed = rm_bed,
-      sd_bed = sd_bed,
-      gencode_gff = gencode_gff,
+      eval_bench = CountConcordance.eval_bench,
+      truth_bench = CountConcordance.truth_bench,
       r_docker = r_docker
   }
 
   output {
     File benchmark_plots = MakePlots.benchmark_plots
-    Array[File] false_positives = CountConcordance.false_positives
-    Array[File] false_negatives_type1 = CountConcordance.false_negatives_type1
-    Array[File] false_negatives_type2 = CountConcordance.false_negatives_type2
+    File eval_benchmark = MakePlots.merged_eval_bench
+    File truth_benchmark = MakePlots.merged_truth_bench
     Array[File] subset_vcfs = subset_truth.subset_vcf
     Array[File] subset_vcf_indicies = subset_truth.subset_vcf_index
   }
@@ -478,18 +477,22 @@ task CountConcordance {
     File truth_in_eval_vcf
     File truth_in_start_vcf
     File start_vcf
+    File sr_bed
+    File rm_bed
+    File sd_bed
+    File pc_genes_bed
     String base_docker
   }
 
-  Float disk_size = size([eval_in_truth_vcf, truth_in_eval_vcf, truth_in_start_vcf, start_vcf], "GB") * 2 + 16
+  Float disk_size = size([eval_in_truth_vcf, truth_in_eval_vcf, truth_in_start_vcf, start_vcf], "GB") * 4 + 32
 
   runtime {
     bootDiskSizeGb: 8
-    cpus: 1
-    disks: "local-disk ${ceil(disk_size)} HDD"
+    cpus: 2
+    disks: "local-disk ${ceil(disk_size)} SSD"
     docker: base_docker
     maxRetries: 1
-    memory: "4 GiB"
+    memory: "8 GiB"
     preemptible: 3
   }
 
@@ -502,57 +505,152 @@ task CountConcordance {
     truth_in_eval_vcf='~{truth_in_eval_vcf}'
     truth_in_start_vcf='~{truth_in_start_vcf}'
     start_vcf='~{start_vcf}'
+    sr_bed='~{sr_bed}'
+    rm_bed='~{rm_bed}'
+    sd_bed='~{sd_bed}'
+    pc_genes_bed='~{pc_genes_bed}'
 
     bcftools query --include 'GT="alt"' \
-      --format '%CHROM\t%POS\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID[\t%SAMPLE]\n' \
-      "${eval_in_truth_vcf}" > 'eval.tsv'
+      --format '%CHROM\t%POS0\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID\t[%SAMPLE,]\n' \
+      "${eval_in_truth_vcf}" \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{sub(/,$/, "", $7)} 1' \
+      | zstd -c > eval_in_truth.tsv.zst
     bcftools query --include 'GT="alt"' \
-      --format '%CHROM\t%POS\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID[\t%SAMPLE]\n' \
-      "${truth_in_eval_vcf}" > 'truth.tsv'
-    bcftools query --include 'INFO/TRUTH_VID != "."' \
-      --format '%ID\t%TRUTH_VID\n' \
-      "${truth_in_start_vcf}" > 'truth_in_start.tsv'
-
-    cut -f 2 'truth_in_start.tsv' | tr ',' '\n' | LC_ALL=C sort -u > start_vcf_vids
-
+      --format '%CHROM\t%POS0\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID[%SAMPLE,]\n' \
+      "${truth_in_eval_vcf}" \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{sub(/,$/, "", $7)} 1' \
+      | zstd -c > truth_in_eval.tsv.zst
+    bcftools query --include 'INFO/TRUTH_VID != "."' --format '%INFO/TRUTH_VID\n' \
+      "${truth_in_start_vcf}" \
+      | tr ',' '\n' \
+      | LC_ALL=C sort -u > 'start_vcf_vids'
     bcftools query --include 'ID=@start_vcf_vids & GT="alt"' \
-      --format '%ID[\t%SAMPLE]\n' "${start_vcf}" > 'start.tsv'
+      --format '%ID\t[%SAMPLE,]\n' "${start_vcf}" \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{sub(/,$/, "", $2)} 1' \
+      | zstd -c > 'start.tsv.zst'
 
-    : > eval_vs_truth.tsv
-    : > truth_vs_eval.tsv
-    : > false_positives.tsv
-    : > false_negatives-type1.tsv
-    : > false_negatives-type2.tsv
+    zstd -cd eval_in_truth.tsv.zst \
+      | cut -f 1,2,3,5 \
+      | LC_ALL=C sort -k 1,1 -k 2,2n \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{print $1,$2,$3,$4,"UN"}' \
+      | bedtools coverage -a stdin -b "${sr_bed}" -sorted \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="SR"}{print $1,$2,$3,$4,$5}' \
+      | bedtools coverage -a stdin -b "${rm_bed}" -sorted \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="RM"}{print $1,$2,$3,$4,$5}' \
+      | bedtools coverage -a stdin -b "${sd_bed}" -sorted \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="SD"}{print $1,$2,$3,$4,$5}' \
+      | bedtools coverage -a stdin -b "${pc_genes_bed}" -sorted \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{print $4,$5,($6>0)}' > eval_with_context.tsv
 
-    gawk -f /opt/gatk-sv-utils/scripts/benchmark_denovo.awk \
-      'eval.tsv' 'truth_in_start.tsv' 'truth.tsv' 'start.tsv'
+    zstd -cd truth_in_eval.tsv.zst \
+      | cut -f 1,2,3,5 \
+      | LC_ALL=C sort -k 1,1 -k 2,2n \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{print $1,$2,$3,$4,"UN"}' \
+      | bedtools coverage -a stdin -b "${sr_bed}" -sorted \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="SR"}{print $1,$2,$3,$4,$5}' \
+      | bedtools coverage -a stdin -b "${rm_bed}" -sorted \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="RM"}{print $1,$2,$3,$4,$5}' \
+      | bedtools coverage -a stdin -b "${sd_bed}" -sorted \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="SD"}{print $1,$2,$3,$4,$5}' \
+      | bedtools coverage -a stdin -b "${pc_genes_bed}" -sorted \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{print $4,$5,($6>0)}' > truth_with_context.tsv
 
-    gzip false_positives.tsv
-    gzip false_negatives-type1.tsv
-    gzip false_negatives-type2.tsv
+cat > commands.sql <<EOF
+CREATE MACRO read_concordance(path) AS TABLE
+  SELECT chr, "start", "end", svtype, id,
+    string_split(truth_vid, ',') AS truth_vid,
+    string_split(samples, ',') AS samples
+  FROM
+  read_csv(
+    path,
+    delim = '\t',
+    header = false,
+    names = ['chr', 'start', 'end', 'svtype', 'id', 'truth_vid', 'samples']
+  );
+CREATE MACRO read_context(path) AS TABLE
+  SELECT * FROM
+  read_csv(
+    path,
+    delim = '\t',
+    header = false,
+    names = ['id', 'context', 'ovp_gene']
+  );
+-- take two grouped lists of samples and get intersection of samples
+CREATE MACRO sample_intersect(p, q) AS
+  length(
+    list_intersect(
+      list_distinct(flatten(list(p))), list_distinct(flatten(list(q)))
+    )
+  );
+CREATE MACRO matches_table(a, b) AS TABLE
+  SELECT l.id, sample_intersect(l.samples, r.samples) AS matches
+  FROM (
+    SELECT id, truth_vid, samples
+    FROM query_table(a)
+    WHERE length(truth_vid) > 1 OR truth_vid[1] != '.'
+  ) l
+  LEFT JOIN query_table(b) r ON (r.id IN l.truth_vid) GROUP BY l.id;
+
+CREATE TABLE eval_vcf AS SELECT * FROM read_concordance('eval_in_truth.tsv.zst');
+CREATE TABLE truth_vcf AS SELECT * FROM read_concordance('truth_in_eval.tsv.zst');
+CREATE TABLE start_vcf AS SELECT id, string_split(samples, ',') AS samples
+  FROM read_csv('start.tsv.zst', header = false, names = ['id', 'samples']);
+CREATE TABLE eval_context AS SELECT * FROM read_context('eval_with_context.tsv');
+CREATE TABLE truth_context AS SELECT * FROM read_context('truth_with_context.tsv');
+-- count matches between eval VCF and truth VCF
+CREATE TABLE eval_in_truth AS SELECT * FROM matches_table('eval_vcf', 'truth_vcf');
+-- count matches between truth VCF and eval VCF
+CREATE TABLE truth_in_eval AS SELECT * FROM matches_table('truth_vcf', 'eval_vcf');
+-- count matches between truth VCF and start VCF
+CREATE TABLE truth_in_start AS SELECT * FROM matches_table('truth_vcf', 'start_vcf');
+-- count true positive and false postive and add genomic context annotations
+COPY (
+  SELECT chr, "start", "end", svtype, id, context, ovp_gene, tp, fp
+  FROM (
+    SELECT chr, "start", "end", svtype, id,
+      coalesce(matches, 0) AS tp,
+      length(samples) - coalesce(matches, 0) AS fp
+      FROM eval_vcf
+      LEFT JOIN eval_in_truth USING (id)
+    ) l
+    JOIN eval_context r USING (id)
+) TO 'eval_bench.tsv.gz' (DELIM '\t', HEADER false);
+
+-- count false negative types 1 and 2 and add genomic context annotations
+COPY (
+  SELECT chr, "start", "end", svtype, id, context, ovp_gene,
+    coalesce(start_matches - eval_matches, 0) AS fn1,
+    length(samples) - coalesce(start_matches, 0) AS fn2
+    FROM (
+      SELECT * FROM truth_vcf
+        LEFT JOIN (
+          SELECT id,
+            coalesce(l.matches, 0) AS eval_matches,
+            coalesce(r.matches, 0) AS start_matches
+            FROM truth_in_eval l
+            FULL JOIN truth_in_start r USING (id)
+        ) USING (id)
+    ) JOIN truth_context USING (id)
+) TO 'truth_bench.tsv.gz' (DELIM '\t', HEADER false);
+EOF
+
+    duckdb -bail scratch.duckdb < commands.sql
   >>>
 
   output {
-    File eval_in_truth_counts = "eval_vs_truth.tsv"
-    File truth_in_eval_counts = "truth_vs_eval.tsv"
-    File false_positives = "false_positives.tsv.gz"
-    File false_negatives_type1 = "false_negatives-type1.tsv.gz"
-    File false_negatives_type2 = "false_negatives-type2.tsv.gz"
+    File eval_bench = "eval_bench.tsv.gz"
+    File truth_bench = "truth_bench.tsv.gz"
   }
 }
 
 task MakePlots {
   input {
-    Array[File] eval_in_truth_counts
-    Array[File] truth_in_eval_counts
-    File sr_bed
-    File rm_bed
-    File sd_bed
-    File gencode_gff
+    Array[File] eval_bench
+    Array[File] truth_bench
     String r_docker
   }
 
-  Float disk_size = size(eval_in_truth_counts, "GB") + size(truth_in_eval_counts, "GB") + 32
+  Float disk_size = size(eval_bench, "GB") + size(truth_bench, "GB") + 32
 
   runtime {
     bootDiskSizeGb: 8
@@ -569,20 +667,11 @@ task MakePlots {
     set -o nounset
     set -o pipefail
 
-    eval_in_truth_counts='~{write_lines(eval_in_truth_counts)}'
-    truth_in_eval_counts='~{write_lines(truth_in_eval_counts)}'
-    sr_bed='~{sr_bed}'
-    rm_bed='~{rm_bed}'
-    sd_bed='~{sd_bed}'
-    gencode_gff='~{gencode_gff}'
+    eval_bench='~{write_lines(eval_bench)}'
+    truth_bench='~{write_lines(truth_bench)}'
 
-    mv "${sr_bed}" hg38_SR.bed.gz
-    mv "${rm_bed}" hg38_RM.bed.gz
-    mv "${sd_bed}" hg38_SD.bed.gz
-    mv "${gencode_gff}" gencode.v49.basic.annotation.gff3.gz
-
-    cat "${eval_in_truth_counts}" | xargs cat > eval_vs_truth.tsv
-    cat "${truth_in_eval_counts}" | xargs cat > truth_vs_eval.tsv
+    cat "${eval_bench}" | xargs cat > eval_bench.tsv.gz
+    cat "${truth_bench}" | xargs cat > truth_bench.tsv.gz
 
     Rscript /opt/gatk-sv-utils/scripts/benchmark_denovo.R
 
@@ -593,5 +682,7 @@ task MakePlots {
 
   output {
     File benchmark_plots = "denovo_benchmark.tar.gz"
+    File merged_eval_bench = "eval_bench-with_header.tsv.gz"
+    File merged_truth_bench = "truth_bench-with_header.tsv.gz"
   }
 }

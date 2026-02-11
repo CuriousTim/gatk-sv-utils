@@ -516,7 +516,7 @@ task CountConcordance {
       | gawk -F'\t' 'BEGIN{OFS="\t"}{sub(/,$/, "", $7)} 1' \
       | zstd -c > eval_in_truth.tsv.zst
     bcftools query --include 'GT="alt"' \
-      --format '%CHROM\t%POS0\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID[%SAMPLE,]\n' \
+      --format '%CHROM\t%POS0\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID\t[%SAMPLE,]\n' \
       "${truth_in_eval_vcf}" \
       | gawk -F'\t' 'BEGIN{OFS="\t"}{sub(/,$/, "", $7)} 1' \
       | zstd -c > truth_in_eval.tsv.zst

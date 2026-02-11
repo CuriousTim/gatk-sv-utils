@@ -1,4 +1,4 @@
-plot_venn <- function(eval_vs_truth, truth_vs_eval, gc = c("GN", "SR", "RM", "SD", "UN"), path = NULL) {
+plot_venn <- function(eval_vs_truth, truth_vs_eval, gc = c("GN", "SR", "RM", "SD", "UN", "UN_or_GN"), path = NULL) {
     gc <- match.arg(gc)
     if (!is.null(path)) {
         jpeg(path, width = 800, height = 450)
@@ -11,8 +11,8 @@ plot_venn <- function(eval_vs_truth, truth_vs_eval, gc = c("GN", "SR", "RM", "SD
     fp <- sum(eval_vs_truth$fp)
     fn1 <- sum(truth_vs_eval$fn1)
     fn2 <- sum(truth_vs_eval$fn2)
-    sens <- tp / (tp + fn1)
-    prec <- tp / (tp + fp)
+    sens <- if (tp + fn1 == 0) NA_real_ else tp / (tp + fn1)
+    prec <- if (tp + fp == 0) NA_real_ else tp / (tp + fp)
 
     par(mar = c(0, 0, 0, 0))
     plot(NULL, xlim = c(0, 1), ylim = c(0, 1), xaxt = "n", yaxt = "n", xlab = "", ylab = "", axes = FALSE, asp = 1, xaxs = "i", yaxs = "i")
@@ -64,7 +64,7 @@ evt <- read.table(
     )
 )
 # convert to 1-start
-evt <- evt$start + 1L
+evt$start <- evt$start + 1L
 tve <- read.table(
     "truth_bench.tsv.gz",
     sep = "\t",
@@ -81,7 +81,7 @@ tve <- read.table(
         "integer"
     )
 )
-tve <- tve$start + 1L
+tve$start <- tve$start + 1L
 
 plot_venn(
     evt[evt$context == "SD", ],

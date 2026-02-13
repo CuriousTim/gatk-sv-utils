@@ -704,8 +704,8 @@ task MakePlots {
 
     cat "${eval_bench}" | xargs cat > eval_bench.tsv.gz
     cat "${truth_bench}" | xargs cat > truth_bench.tsv.gz
-    cat "${fn1}" | xargs cat > fn1.tsv.gz
-    cat "${fn2}" | xargs cat > fn2.tsv.gz
+    cat "${fn1}" | xargs cat > false_negative_1.tsv.gz
+    cat "${fn2}" | xargs cat > false_negative_2.tsv.gz
 
     Rscript /opt/gatk-sv-utils/scripts/benchmark_denovo.R
 

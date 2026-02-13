@@ -11,8 +11,9 @@ plot_venn <- function(eval_vs_truth, truth_vs_eval, gc = c("GN", "SR", "RM", "SD
     fp <- sum(eval_vs_truth$fp)
     fn1 <- sum(truth_vs_eval$fn1)
     fn2 <- sum(truth_vs_eval$fn2)
-    sens <- if (tp + fn1 == 0) NA_real_ else tp / (tp + fn1)
-    prec <- if (tp + fp == 0) NA_real_ else tp / (tp + fp)
+    sens1 <- if (tp + fn1 == 0) NA_real_ else tp / (tp + fn1)
+    sens2 <- if (tp + fn1 + fn2 == 0) NA_real_ else tp / (tp + fn1 + fn2)
+    prec1 <- if (tp + fp == 0) NA_real_ else tp / (tp + fp)
 
     par(mar = c(0, 0, 0, 0))
     plot(NULL, xlim = c(0, 1), ylim = c(0, 1), xaxt = "n", yaxt = "n", xlab = "", ylab = "", axes = FALSE, asp = 1, xaxs = "i", yaxs = "i")
@@ -27,7 +28,8 @@ plot_venn <- function(eval_vs_truth, truth_vs_eval, gc = c("GN", "SR", "RM", "SD
     text(0.5, 0.3, labels = fn1, cex = 2, adj = 0.5)
     text(0.4, 0.6, labels = tp, cex = 2, adj = 0.5)
     text(0.15, 0.7, labels = fp, cex = 2, adj = 0.5)
-    text(1.2, 0.8, labels = sprintf("Sensitivity:\n%0.2f", sens), cex = 1.5, adj = 0.5)
+    text(1.2, 0.8, labels = sprintf("Sensitivity 1:\n%0.2f", sens1), cex = 1.5, adj = 0.5)
+    text(-0.2, 0.8, labels = sprintf("Sensitivity 2:\n%0.2f", sens2), cex = 1.5, adj = 0.5)
     text(1.2, 0.2, labels = sprintf("Precision:\n%0.2f", prec), cex = 1.5, adj = 0.5)
 }
 

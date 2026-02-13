@@ -13,7 +13,7 @@ plot_venn <- function(eval_vs_truth, truth_vs_eval, gc = c("GN", "SR", "RM", "SD
     fn2 <- sum(truth_vs_eval$fn2)
     sens1 <- if (tp + fn1 == 0) NA_real_ else tp / (tp + fn1)
     sens2 <- if (tp + fn1 + fn2 == 0) NA_real_ else tp / (tp + fn1 + fn2)
-    prec1 <- if (tp + fp == 0) NA_real_ else tp / (tp + fp)
+    prec <- if (tp + fp == 0) NA_real_ else tp / (tp + fp)
 
     par(mar = c(0, 0, 0, 0))
     plot(NULL, xlim = c(0, 1), ylim = c(0, 1), xaxt = "n", yaxt = "n", xlab = "", ylab = "", axes = FALSE, asp = 1, xaxs = "i", yaxs = "i")

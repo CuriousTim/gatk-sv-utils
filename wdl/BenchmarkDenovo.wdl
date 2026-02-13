@@ -131,6 +131,8 @@ workflow BenchmarkDenovo {
     input:
       eval_bench = CountConcordance.eval_bench,
       truth_bench = CountConcordance.truth_bench,
+      fn1 = CountConcordance.fn1,
+      fn2 = CountConcordance.fn2,
       r_docker = r_docker
   }
 
@@ -138,6 +140,8 @@ workflow BenchmarkDenovo {
     File benchmark_plots = MakePlots.benchmark_plots
     File eval_benchmark = MakePlots.merged_eval_bench
     File truth_benchmark = MakePlots.merged_truth_bench
+    File false_negative_1 = MakePlots.false_negative_1
+    File false_negative_2 = MakePlots.false_negative_2
     Array[File] subset_vcfs = subset_truth.subset_vcf
     Array[File] subset_vcf_indicies = subset_truth.subset_vcf_index
   }
@@ -632,6 +636,28 @@ COPY (
         ) USING (id)
     ) JOIN truth_context USING (id)
 ) TO 'truth_bench.tsv.gz' (DELIM '\t', HEADER false);
+
+-- get the actual false negative calls
+CREATE TABLE fn2 AS
+  SELECT chr, "start", "end", svtype, id, unnest(samples) AS "sample"
+  FROM truth_vcf
+  EXCEPT
+  SELECT chr, "start", "end", svtype, l.id, unnest(flatten(list(r.samples))) AS "sample"
+    FROM truth_vcf l
+    LEFT JOIN start_vcf r ON (r.id IN l.truth_vid)
+    GROUP BY chr, l.start, l.end, l.svtype, l.id;
+COPY (
+  SELECT chr, "start", "end", svtype, id, "sample" FROM fn2
+) TO 'fn2.tsv.gz' (DELIM '\t', HEADER false);
+COPY ((SELECT chr, "start", "end", svtype, id, unnest(samples) AS "sample"
+  FROM truth_vcf
+  EXCEPT
+  SELECT l.chr, l.start, l.end, l.svtype, l.id, unnest(flatten(list(r.samples))) AS "sample"
+    FROM truth_vcf l
+    LEFT JOIN eval_vcf r ON (r.id IN l.truth_vid)
+    GROUP BY l.chr, l.start, l.end, l.svtype, l.id)
+  EXCEPT
+  SELECT * FROM fn2) TO 'fn1.tsv.gz' (DELIM '\t', HEADER false);
 EOF
 
     duckdb -bail scratch.duckdb < commands.sql
@@ -640,6 +666,8 @@ EOF
   output {
     File eval_bench = "eval_bench.tsv.gz"
     File truth_bench = "truth_bench.tsv.gz"
+    File fn1 = "fn1.tsv.gz"
+    File fn2 = "fn2.tsv.gz"
   }
 }
 
@@ -647,6 +675,8 @@ task MakePlots {
   input {
     Array[File] eval_bench
     Array[File] truth_bench
+    Array[File] fn1
+    Array[File] fn2
     String r_docker
   }
 
@@ -669,9 +699,13 @@ task MakePlots {
 
     eval_bench='~{write_lines(eval_bench)}'
     truth_bench='~{write_lines(truth_bench)}'
+    fn1='~{write_lines(fn1)}'
+    fn2='~{write_lines(fn2)}'
 
     cat "${eval_bench}" | xargs cat > eval_bench.tsv.gz
     cat "${truth_bench}" | xargs cat > truth_bench.tsv.gz
+    cat "${fn1}" | xargs cat > fn1.tsv.gz
+    cat "${fn2}" | xargs cat > fn2.tsv.gz
 
     Rscript /opt/gatk-sv-utils/scripts/benchmark_denovo.R
 
@@ -684,5 +718,7 @@ task MakePlots {
     File benchmark_plots = "denovo_benchmark.tar.gz"
     File merged_eval_bench = "eval_bench-with_header.tsv.gz"
     File merged_truth_bench = "truth_bench-with_header.tsv.gz"
+    File false_negative_1 = "false_negative_1.tsv.gz"
+    File false_negative_2 = "false_negative_2.tsv.gz"
   }
 }

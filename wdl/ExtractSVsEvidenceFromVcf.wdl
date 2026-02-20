@@ -90,7 +90,8 @@ workflow ExtractSVsEvidenceFromVcf {
 
 task SubsetVcf {
   input {
-    # chr,start,end,vid,svtype,sample
+    # with header
+    # chr,start,end,svlen,vid,svtype,sample
     File variants
     File vcf
     File vcf_index
@@ -119,24 +120,26 @@ task SubsetVcf {
     vcf='~{vcf}'
     vcf_label='~{vcf_label}'
 
-    cut -f 6 "${variants}" | LC_ALL=C sort -u > samples
+    gawk 'NR > 1' "${variants}" > no_header_variants
+
+    cut -f 7 no_header_variants | LC_ALL=C sort -u > samples
     bcftools query --list-samples "${vcf}" | LC_ALL=C sort -u > vcf_samples
     LC_ALL=C comm -12 samples vcf_samples > common_samples
     if [[ ! -s common_samples ]]; then
       exit 0
     fi
-    cut -f 1,2,3 "${variants}" | LC_ALL=C sort -k1,1 -k2,2n > coordinates
+    cut -f 1,2,3 no_header_variants | LC_ALL=C sort -k1,1 -k2,2n > coordinates
 
     bcftools query --samples-file common_samples --include 'GT="alt"' \
       --regions-file coordinates --format '[%CHROM\t%POS0\t%INFO/END\t%ID\t%INFO/SVTYPE\tSAMPLE]\n' \
       | LC_ALL=C sort -k1,1 -k2,2n \
       | gzip -c > database.bed.gz
-    bedtools intersect -a "${variants}" -b "${database}" -wo -sorted \
+    bedtools intersect -a no_header_variants -b "${database}" -wo -sorted \
       | gawk -F'\t' '
           BEGIN {OFS = "\t"; OFMT = "%.0f"}
-          $5 != $11 && $6 != $12 { next }
+          $6 != $12 && $7 != $13 { next }
           {
-            print $1,$2 + 1,$3,$4,$5,$6,$7,$8 + 1,$9,$10,$11,vcf_label
+            print $1,$2 + 1,$3,$5,$6,$7,$8,$9 + 1,$10,$11,$12,vcf_label
           }' vcf_label="${vcf_label}" - \
       | gzip -c > variants.tsv.gz
   >>>

@@ -128,7 +128,7 @@ task SubsetVcf {
     if [[ ! -s common_samples ]]; then
       exit 0
     fi
-    cut -f 1,2,3 no_header_variants | LC_ALL=C sort -k1,1 -k2,2n > coordinates
+    gawk 'BEGIN{OFS="\t"} {print $1,$2-1,$3}' no_header_variants | LC_ALL=C sort -k1,1 -k2,2n > coordinates
 
     bcftools query --samples-file common_samples --include 'GT="alt"' \
       --regions-file coordinates --format '[%CHROM\t%POS0\t%INFO/END\t%ID\t%INFO/SVTYPE\tSAMPLE]\n' \

@@ -160,3 +160,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: ExtractSVsEvidenceFromVcf
+    subclass: WDL
+    primaryDescriptorPath: /wdl/ExtractSVsEvidenceFromVcf.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

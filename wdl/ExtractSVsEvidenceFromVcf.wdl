@@ -134,7 +134,7 @@ task SubsetVcf {
       --regions-file coordinates --format '[%CHROM\t%POS0\t%INFO/END\t%ID\t%INFO/SVTYPE\tSAMPLE]\n' \
       | LC_ALL=C sort -k1,1 -k2,2n \
       | gzip -c > database.bed.gz
-    bedtools intersect -a no_header_variants -b "${database}" -wo -sorted \
+    bedtools intersect -a no_header_variants -b database.bed.gz -wo -sorted \
       | gawk -F'\t' '
           BEGIN {OFS = "\t"; OFMT = "%.0f"}
           $6 != $12 && $7 != $13 { next }

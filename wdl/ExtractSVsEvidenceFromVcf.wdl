@@ -194,8 +194,9 @@ task MergeVariants {
     melt_variants='~{write_lines(melt_variants)}'
     depth_variants='~{write_lines(depth_variants)}'
 
-    cat "${cohort}" "${wham_variants}" "${manta_variants}" "${melt_variants}" "${depth_variants}" \
-      | xargs cat > merged_variants.tsv.gz
+    cat "${cohort_variants}" "${wham_variants}" "${manta_variants}" "${melt_variants}" "${depth_variants}" \
+      | xargs gzip -cd \
+      | gzip -c > merged_variants.tsv.gz
   >>>
 
   output {

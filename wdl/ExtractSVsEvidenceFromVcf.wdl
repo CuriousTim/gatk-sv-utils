@@ -120,18 +120,18 @@ task SubsetVcf {
     vcf='~{vcf}'
     vcf_label='~{vcf_label}'
 
-    gawk 'NR > 1' "${variants}" > no_header_variants
-
-    cut -f 7 no_header_variants | LC_ALL=C sort -u > samples
+    cut -f 7 "${variants}" | LC_ALL=C sort -u > samples
     bcftools query --list-samples "${vcf}" | LC_ALL=C sort -u > vcf_samples
     LC_ALL=C comm -12 samples vcf_samples > common_samples
     if [[ ! -s common_samples ]]; then
       exit 0
     fi
-    gawk 'BEGIN{OFS="\t"} {print $1,$2-1,$3}' no_header_variants | LC_ALL=C sort -k1,1 -k2,2n > coordinates
+    gawk 'BEGIN{OFMT="%0.f"; OFS="\t"} NR > 1{$2-=1; print}' "${variants}" \
+      | LC_ALL=C sort -k1,1 -k2,2n > no_header_variants
+    cut -f 1,2,3 no_header_variants > coordinates.bed
 
     bcftools query --samples-file common_samples --include 'GT="alt"' \
-      --regions-file coordinates --format '[%CHROM\t%POS0\t%INFO/END\t%ID\t%INFO/SVTYPE\tSAMPLE]\n' \
+      --regions-file coordinates.bed --format '[%CHROM\t%POS0\t%INFO/END\t%ID\t%INFO/SVTYPE\tSAMPLE]\n' \
       "${vcf}" \
       | LC_ALL=C sort -k1,1 -k2,2n \
       | gzip -c > database.bed.gz

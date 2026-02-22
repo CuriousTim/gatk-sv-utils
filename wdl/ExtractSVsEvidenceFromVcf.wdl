@@ -200,6 +200,6 @@ task MergeVariants {
   >>>
 
   output {
-    File merged_variants = "merged_variants"
+    File merged_variants = "merged_variants.tsv.gz"
   }
 }

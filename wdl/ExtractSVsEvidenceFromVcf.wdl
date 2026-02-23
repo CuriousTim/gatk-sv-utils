@@ -138,7 +138,7 @@ task SubsetVcf {
     bedtools intersect -a no_header_variants -b database.bed.gz -wo -sorted \
       | gawk -F'\t' '
           BEGIN {OFS = "\t"; OFMT = "%.0f"}
-          $6 != $12 && $7 != $13 { next }
+          $6 != $12 || $7 != $13 { next }
           {
             print $1,$2 + 1,$3,$5,$6,$7,$8,$9 + 1,$10,$11,$12,vcf_label
           }' vcf_label="${vcf_label}" - \

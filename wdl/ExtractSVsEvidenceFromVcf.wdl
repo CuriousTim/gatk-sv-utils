@@ -130,7 +130,8 @@ task SubsetVcf {
       | LC_ALL=C sort -k1,1 -k2,2n > no_header_variants
     cut -f 1,2,3 no_header_variants > coordinates.bed
 
-    bcftools query --samples-file common_samples --include 'GT="alt"' \
+    bcftools query --samples-file common_samples \
+      --include 'GT="alt" & INFO/SVTYPE != "BND"' \
       --regions-file coordinates.bed --format '[%CHROM\t%POS0\t%INFO/END\t%ID\t%INFO/SVTYPE\t%SAMPLE\n]' \
       "${vcf}" \
       | LC_ALL=C sort -k1,1 -k2,2n \

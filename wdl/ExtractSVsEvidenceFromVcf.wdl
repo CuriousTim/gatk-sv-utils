@@ -4,6 +4,7 @@ version 1.0
 workflow ExtractSVsEvidenceFromVcf {
   input {
     File variants
+    File pedigree
     Array[String] sample_set_ids
     Array[File] cohort_vcfs
     Array[File] cohort_vcf_indexes
@@ -18,10 +19,17 @@ workflow ExtractSVsEvidenceFromVcf {
     String base_docker
   }
 
+  call AddParents {
+    input:
+      variants = variants,
+      pedigree = pedigree,
+      base_docker = base_docker
+  }
+
   scatter (i in range(length(cohort_vcfs))) {
     call SubsetVcf as subset_cohort {
       input:
-        variants = variants,
+        variants = AddParents.parents_added_variants,
         vcf = cohort_vcfs[i],
         vcf_index = cohort_vcf_indexes[i],
         vcf_label = "cohort",
@@ -32,7 +40,7 @@ workflow ExtractSVsEvidenceFromVcf {
   scatter (i in range(length(sample_set_ids))) {
     call SubsetVcf as subset_manta {
       input:
-        variants = variants,
+        variants = AddParents.parents_added_variants,
         vcf = clustered_manta_vcfs[i],
         vcf_index = clustered_manta_vcf_indexes[i],
         vcf_label = "Manta",
@@ -43,7 +51,7 @@ workflow ExtractSVsEvidenceFromVcf {
   scatter (i in range(length(sample_set_ids))) {
     call SubsetVcf as subset_melt {
       input:
-        variants = variants,
+        variants = AddParents.parents_added_variants,
         vcf = clustered_melt_vcfs[i],
         vcf_index = clustered_melt_vcf_indexes[i],
         vcf_label = "MELT",
@@ -54,7 +62,7 @@ workflow ExtractSVsEvidenceFromVcf {
   scatter (i in range(length(sample_set_ids))) {
     call SubsetVcf as subset_wham {
       input:
-        variants = variants,
+        variants = AddParents.parents_added_variants,
         vcf = clustered_wham_vcfs[i],
         vcf_index = clustered_wham_vcf_indexes[i],
         vcf_label = "Wham",
@@ -65,7 +73,7 @@ workflow ExtractSVsEvidenceFromVcf {
   scatter (i in range(length(sample_set_ids))) {
     call SubsetVcf as subset_depth {
       input:
-        variants = variants,
+        variants = AddParents.parents_added_variants,
         vcf = clustered_depth_vcfs[i],
         vcf_index = clustered_depth_vcf_indexes[i],
         vcf_label = "Depth",
@@ -85,6 +93,47 @@ workflow ExtractSVsEvidenceFromVcf {
 
   output {
     File merged_variants = MergeVariants.merged_variants
+  }
+}
+
+task AddParents {
+  input {
+    File variants
+    File pedigree
+    String base_docker
+  }
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk 50 HDD"
+    docker: base_docker
+    maxRetries: 1
+    memory: "1 GiB"
+    preemptible: 3
+  }
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    variants='~{variants}'
+    pedigree='~{pedigree}'
+
+    gawk -F'\t' '
+      BEGIN{OFS="\t"}
+      ARGIND==1{a[$2]=$3;b[$2]=$4; next}
+      FNR==1{print; next}
+      {s=$7; print}
+      s in a{$7=a[s]; print}
+      s in b{$7=b[s]; print}
+    ' "${pedigree}" "${variants}" > parents_added_variants.tsv
+
+  >>>
+
+  output {
+    File parents_added_variants = "parents_added_variants.tsv"
   }
 }
 

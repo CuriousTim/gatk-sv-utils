@@ -497,7 +497,7 @@ task AnnotateGenomicContext {
     disks: "local-disk ${ceil(inputs_size + 32)} HDD"
     docker: base_docker
     maxRetries: 1
-    memory: "4 GiB"
+    memory: "8 GiB"
     preemptible: 3
   }
 

@@ -572,7 +572,7 @@ task ReformatVcfs {
       | sed 's/,$//' \
       | gzip -c > truth_in_eval.tsv.gz
     bcftools query --include 'GT = "alt"' --format '%ID\t%INFO/TRUTH_VID\t[%SAMPLE,]\n' \
-      "${truth_in_start}" \
+      "${truth_in_start_vcf}" \
       | sed 's/,$//' \
       | gzip -c > truth_in_start.tsv.gz
     bcftools query --include 'GT = "alt"' --format '%ID\t[%SAMPLE,]\n' \

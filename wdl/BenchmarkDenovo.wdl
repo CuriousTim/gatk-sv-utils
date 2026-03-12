@@ -641,7 +641,7 @@ task MakeBenchmarkTables {
     gzip -cd "${denovos}" \
       | awk -vcontig="${contig}" 'NR==1{for(i=1;i<=NF;++i){a[$i]=i}; print} NR>1 && $(a["chr"]) == contig' \
           - \
-      | gzip -c 'denovo_svs-outliers_flagged.tsv.gz'
+      | gzip -c > 'denovo_svs-outliers_flagged.tsv.gz'
 
     mv "${eval_in_truth}" 'eval_in_truth.tsv.gz'
     mv "${truth_vcf_carriers}" 'truth_vcf_carriers.tsv.gz'

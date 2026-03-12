@@ -134,11 +134,13 @@ workflow BenchmarkDenovo {
 
     call MakeBenchmarkTables {
       input:
+        denovos = denovos,
         eval_in_truth = ReformatVcfs.eval_in_truth_reformatted,
         truth_vcf_carriers = ReformatVcfs.truth_vcf_carriers,
         truth_in_start = ReformatVcfs.truth_in_start_reformatted,
         start_vcf_carriers = ReformatVcfs.start_vcf_carriers,
         truth_vcf_annotations = annotate_truth.annotated_sites,
+        contig = contigs[i],
         r_docker = r_docker
     }
   }
@@ -601,15 +603,17 @@ task ReformatVcfs {
 
 task MakeBenchmarkTables {
   input {
+    File denovos
     File eval_in_truth
     File truth_vcf_carriers
     File truth_in_start
     File start_vcf_carriers
     File truth_vcf_annotations
+    String contig
     String r_docker
   }
 
-  Float inputs_size = size([eval_in_truth, truth_vcf_carriers, truth_in_start, start_vcf_carriers, truth_vcf_annotations], "GB")
+  Float inputs_size = size([denovos, eval_in_truth, truth_vcf_carriers, truth_in_start, start_vcf_carriers, truth_vcf_annotations], "GB")
 
   runtime {
     bootDiskSizeGb: 8
@@ -626,11 +630,18 @@ task MakeBenchmarkTables {
     set -o nounset
     set -o pipefail
 
+    denovos='~{denovos}'
     eval_in_truth='~{eval_in_truth}'
     truth_vcf_carriers='~{truth_vcf_carriers}'
     truth_in_start='~{truth_in_start}'
     start_vcf_carriers='~{start_vcf_carriers}'
     truth_vcf_annotations='~{truth_vcf_annotations}'
+    contig='~{contig}'
+
+    gzip -cd "${denovos}" \
+      | awk -vcontig="${contig}" 'NR==1{for(i=1;i<=NF;++i){a[$i]=i}; print} NR>1 && $(a["chr"]) == contig' \
+          - \
+      | gzip -c 'denovo_svs-outliers_flagged.tsv.gz'
 
     mv "${eval_in_truth}" 'eval_in_truth.tsv.gz'
     mv "${truth_vcf_carriers}" 'truth_vcf_carriers.tsv.gz'

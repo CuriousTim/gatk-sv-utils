@@ -34,7 +34,7 @@ start_carriers[, samples := NULL]
 truth_vcf_annotations <- fread(
     "truth_vcf_annotations.tsv",
     header = FALSE,
-    col.names = c("vid", "genomic_context", "ovp_pc_gene")
+    col.names = c("vid", "genomic_context", "ovp_pc_gene"),
     key = "vid"
 )
 

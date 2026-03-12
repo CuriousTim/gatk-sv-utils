@@ -82,16 +82,6 @@ workflow BenchmarkDenovo {
         base_docker = base_docker
     }
 
-    call AnnotateGenomicContext as annotate_eval {
-      input:
-        vcf = subset_start.subset_vcf,
-        sr_bed = sr_bed,
-        rm_bed = rm_bed,
-        sd_bed = sd_bed,
-        pc_genes_bed = pc_genes_bed,
-        base_docker = base_docker
-    }
-
     call AnnotateGenomicContext as annotate_truth {
       input:
         vcf = subset_truth.subset_vcf,
@@ -141,13 +131,29 @@ workflow BenchmarkDenovo {
         start_vcf = subset_start.for_concordance_vcf,
         base_docker = base_docker
     }
+
+    call MakeBenchmarkTables {
+      input:
+        eval_in_truth = ReformatVcfs.eval_in_truth_reformatted,
+        truth_vcf_carriers = ReformatVcfs.truth_vcf_carriers,
+        truth_in_start = ReformatVcfs.truth_in_start_reformatted,
+        start_vcf_carriers = ReformatVcfs.start_vcf_carriers,
+        truth_vcf_annotations = annotate_truth.annotated_sites,
+        r_docker = r_docker
+    }
+  }
+
+  call MakePlots {
+    input:
+      eval_benchmarks = MakeBenchmarkTables.eval_benchmark,
+      truth_benchmarks= MakeBenchmarkTables.truth_benchmark,
+      r_docker = r_docker
   }
 
   output {
-    Array[File] eval_in_truth = ReformatVcfs.eval_in_truth_reformatted
-    Array[File] truth_in_eval = ReformatVcfs.truth_in_eval_reformatted
-    Array[File] truth_in_start = ReformatVcfs.truth_in_start_reformatted
-    Array[File] start_vcf_carriers = ReformatVcfs.start_vcf_carriers
+    File eval_benchmark = MakePlots.eval_benchmark
+    File truth_benchmark = MakePlots.truth_benchmark
+    File benchmark_plots = MakePlots.benchmark_plots
   }
 }
 
@@ -523,7 +529,7 @@ task AnnotateGenomicContext {
       | bedtools coverage -a stdin -b "${sd_bed}" -sorted \
       | gawk -F'\t' 'BEGIN{OFS="\t"}$8>=0.5{$5="SD"}{print $1,$2,$3,$4,$5}' \
       | bedtools coverage -a stdin -b "${pc_genes_bed}" -sorted \
-      | gawk -F'\t' 'BEGIN{OFS="\t"}{print $0,($6>0)}' > "annotations.tsv"
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{print $4,$5,($6>0)}' > "annotations.tsv"
   >>>
 
   output {
@@ -545,7 +551,7 @@ task ReformatVcfs {
   runtime {
     bootDiskSizeGb: 8
     cpus: 1
-    disks: "local-disk ${ceil(inputs_size * 4 + 32)} SSD"
+    disks: "local-disk ${ceil(inputs_size * 4 + 32)} HDD"
     docker: base_docker
     maxRetries: 1
     memory: "4 GiB"
@@ -562,29 +568,125 @@ task ReformatVcfs {
     truth_in_start_vcf='~{truth_in_start_vcf}'
     start_vcf='~{start_vcf}'
 
-    bcftools query --include 'INFO/TRUTH_VID != "." & GT="alt"' \
-      --format '%ID\t%INFO/TRUTH_VID\t[%SAMPLE,]\n' "${eval_in_truth_vcf}" \
-      | sed 's/,$//' \
+    bcftools query --exclude 'INFO/TRUTH_VID = "."' \
+      --format '%ID\t%INFO/TRUTH_VID\n' "${eval_in_truth_vcf}" \
+      | awk '{split($2, a, /,/); for (i in a){print $1 "\t" a[i]}}' \
       | gzip -c > eval_in_truth.tsv.gz
     bcftools query --include 'GT = "alt"' \
-      --format '%CHROM\t%POS\t%INFO/END\t%INFO/SVTYPE\t%ID\t%INFO/TRUTH_VID\t[%SAMPLE,]\n' \
+      --format '[%CHROM\t%POS\t%INFO/END\t%INFO/SVTYPE\t%ID\t%SAMPLE\n]' \
       "${truth_in_eval_vcf}" \
-      | sed 's/,$//' \
-      | gzip -c > truth_in_eval.tsv.gz
-    bcftools query --include 'GT = "alt"' --format '%ID\t%INFO/TRUTH_VID\t[%SAMPLE,]\n' \
+      | gzip -c > truth_vcf_carriers.tsv.gz
+    bcftools query --exclude 'INFO/TRUTH_VID = "."' --format '%ID\t%INFO/TRUTH_VID\n' \
       "${truth_in_start_vcf}" \
       | sed 's/,$//' \
+      | awk '{split($2, a, /,/); for (i in a){print $1 "\t" a[i]}}' \
       | gzip -c > truth_in_start.tsv.gz
-    bcftools query --include 'GT = "alt"' --format '%ID\t[%SAMPLE,]\n' \
-      "${start_vcf}" \
+    gzip -cd truth_in_start.tsv.gz \
+      | cut -f 2 \
+      | tr ',' '\n' \
+      | LC_ALL=C sort -u > start_vids
+    bcftools view --include 'ID=@start_vids' --output-type u "${start_vcf}" \
+      | bcftools query --include 'GT = "alt"' --format '%ID\t[%SAMPLE,]\n' \
       | sed 's/,$//' \
       | gzip -c > start_vcf_carriers.tsv.gz
   >>>
 
   output {
     File eval_in_truth_reformatted = "eval_in_truth.tsv.gz"
-    File truth_in_eval_reformatted = "truth_in_eval.tsv.gz"
+    File truth_vcf_carriers = "truth_vcf_carriers.tsv.gz"
     File truth_in_start_reformatted = "truth_in_start.tsv.gz"
     File start_vcf_carriers = "start_vcf_carriers.tsv.gz"
+  }
+}
+
+task MakeBenchmarkTables {
+  input {
+    File eval_in_truth
+    File truth_vcf_carriers
+    File truth_in_start
+    File start_vcf_carriers
+    File truth_vcf_annotations
+    String r_docker
+  }
+
+  Float inputs_size = size([eval_in_truth, truth_vcf_carriers, truth_in_start, start_vcf_carriers, truth_vcf_annotations], "GB")
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk ${ceil(inputs_size * 4 + 32)} HDD"
+    docker: r_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    eval_in_truth='~{eval_in_truth}'
+    truth_vcf_carriers='~{truth_vcf_carriers}'
+    truth_in_start='~{truth_in_start}'
+    start_vcf_carriers='~{start_vcf_carriers}'
+    truth_vcf_annotations='~{truth_vcf_annotations}'
+
+    mv "${eval_in_truth}" 'eval_in_truth.tsv.gz'
+    mv "${truth_vcf_carriers}" 'truth_vcf_carriers.tsv.gz'
+    mv "${truth_in_start}" 'truth_in_start.tsv.gz'
+    mv "${start_vcf_carriers}" 'start_vcf_carriers.tsv.gz'
+    mv "${truth_vcf_annotations}" 'truth_vcf_annotations.tsv'
+
+    Rscript /opt/gatk-sv-utils/scripts/benchmark_denovo.R
+  >>>
+
+  output {
+    File eval_benchmark = "denovo_svs-benchmark.tsv.gz"
+    File truth_benchmark = "truth_denovos-benchmark.tsv.gz"
+  }
+}
+
+task MakePlots {
+  input {
+    Array[File] eval_benchmarks
+    Array[File] truth_benchmarks
+    String r_docker
+  }
+
+  Float inputs_size = size(eval_benchmarks, "GB") + size(truth_benchmarks, "GB")
+
+  runtime {
+    bootDiskSizeGb: 8
+    cpus: 1
+    disks: "local-disk ${ceil(inputs_size + 32)} HDD"
+    docker: r_docker
+    maxRetries: 1
+    memory: "4 GiB"
+    preemptible: 3
+  }
+
+  command <<<
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+
+    eval_benchmarks='~{write_lines(eval_benchmarks)}'
+    truth_benchmarks='~{write_lines(truth_benchmarks)}'
+
+    mv "${eval_benchmarks}" 'eval_benchmarks.txt'
+    mv "${truth_benchmarks}" 'truth_benchmarks.txt'
+
+    Rscript /opt/gatk-sv-utils/scripts/make_denovo_benchmark_plots.R
+
+    mkdir denovo_benchmark
+    mv *.jpg denovo_benchmark
+    tar -czf denovo_benchmark.tar.gz denovo_benchmark
+  >>>
+
+  output {
+    File eval_benchmark = "eval_benchmark.tsv.gz"
+    File truth_benchmark = "truth_benchmark.tsv.gz"
+    File benchmark_plots = "denovo_benchmark.tar.gz"
   }
 }

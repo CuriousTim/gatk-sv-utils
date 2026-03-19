@@ -365,7 +365,7 @@ task MakeDenovoVcf {
     mv "${denovos}" denovos.tsv.gz
     cat > commands.sql <<EOF
     COPY (
-      SELECT DISTINCT "name", "sample"
+      SELECT DISTINCT "vid", "sample"
       FROM 'denovos.tsv.gz'
       WHERE is_de_novo = 'TRUE'
     ) TO 'denovo_vids' (HEADER false, DELIMITER '\t');

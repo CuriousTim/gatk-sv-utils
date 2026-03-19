@@ -38,7 +38,7 @@ truth_vcf_annotations <- fread(
     key = "vid"
 )
 
-eval_benchmark <- eval_vs_truth_hits[denovo_calls, on = c(vid = "name")]
+eval_benchmark <- eval_vs_truth_hits[denovo_calls, on = "vid"]
 truth_carriers_by_vid <- truth_carriers[, list(truth_carriers = list(sample)), by = "vid"]
 setnames(truth_carriers_by_vid, "vid", "truth_vid")
 eval_benchmark <- truth_carriers_by_vid[eval_benchmark, on = c(truth_vid = "match_vid")]
@@ -50,8 +50,8 @@ fwrite(eval_benchmark, "denovo_svs-benchmark.tsv.gz", sep = "\t", quote = FALSE)
 
 truth_benchmark <- truth_vs_start_hits[truth_carriers, on = "vid"]
 truth_benchmark <- start_carriers[truth_benchmark, on = c(start_vid = "match_vid")]
-eval_carriers_by_vid <- denovo_calls[is_de_novo == TRUE, list(eval_samples = list(sample)), by = "name"]
-truth_benchmark <- eval_carriers_by_vid[truth_benchmark, on = c(`name` = "start_vid")]
+eval_carriers_by_vid <- denovo_calls[is_de_novo == TRUE, list(eval_samples = list(sample)), by = "vid"]
+truth_benchmark <- eval_carriers_by_vid[truth_benchmark, on = c(vid = "start_vid")]
 truth_benchmark[, `:=`(start_match = mapply(`%in%`, sample, start_samples), eval_match = mapply(`%in%`, sample, eval_samples))]
 truth_benchmark <- truth_benchmark[, list(in_eval = any(eval_match), in_start = any(start_match)),
                                    by = c("chr", "start", "end", "svtype", "vid", "sample")]

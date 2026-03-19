@@ -114,8 +114,10 @@ for (i in seq_len(nrow(variants))) {
         next
     }
 
+    # INS start to end length is always 1b which is not long enough to
+    # visualize anything so we add 1Kb padding.
     sve <- tryCatch(
-        svevidence(v$chr, v$start, v$end, pe, sr, rd, v$svtype, pad = 0.3),
+        svevidence(v$chr, v$start, v$end, pe, sr, rd, v$svtype, pad = if (v$svtype == "INS") 1000 else 0.3),
         scanTabix_io = function(e) {
             writeLines(
                 sprintf("%s\t%s\t%s", v$sample_id, v$vid, "error querying evidence files"),

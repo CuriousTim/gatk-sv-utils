@@ -525,13 +525,13 @@ task AnnotateGenomicContext {
 
     gawk -F'\t' '{print $0 "\tUN"}' sites.bed \
       | bedtools coverage -a stdin -b "${sr_bed}" -sorted \
-      | gawk -F'\t' 'BEGIN{OFS="\t"}$8>=0.5{$5="SR"}{print $1,$2,$3,$4,$5}' \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="SR"}{print $1,$2,$3,$4,$5}' \
       | bedtools coverage -a stdin -b "${rm_bed}" -sorted \
-      | gawk -F'\t' 'BEGIN{OFS="\t"}$8>=0.5{$5="RM"}{print $1,$2,$3,$4,$5}' \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="RM"}{print $1,$2,$3,$4,$5}' \
       | bedtools coverage -a stdin -b "${sd_bed}" -sorted \
-      | gawk -F'\t' 'BEGIN{OFS="\t"}$8>=0.5{$5="SD"}{print $1,$2,$3,$4,$5}' \
+      | gawk -F'\t' 'BEGIN{OFS="\t"}$9>=0.5{$5="SD"}{print $1,$2,$3,$4,$5}' \
       | bedtools coverage -a stdin -b "${pc_genes_bed}" -sorted \
-      | gawk -F'\t' 'BEGIN{OFS="\t"}{print $4,$5,($6>0)}' > "annotations.tsv"
+      | gawk -F'\t' 'BEGIN{OFS="\t"}{print $4,$5,($7>0)}' > "annotations.tsv"
   >>>
 
   output {

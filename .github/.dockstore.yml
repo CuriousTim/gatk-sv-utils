@@ -168,3 +168,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: CountSVsPerSampleAtSites
+    subclass: WDL
+    primaryDescriptorPath: /wdl/CountSVsPerSampleAtSites.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

@@ -119,7 +119,7 @@ task MergeCounts {
       i=$((i + 1))
     done < "${counts_files}"
 
-    duckdb -bail ':memory:' "COPY (SELECT sid, sum(count) AS svs_per_sample FROM read_csv('counts/*.tsv.gz', names = ['sid', 'count']) GROUP BY sid) TO 'svs_per_sample.tsv.gz' (DELIMITER '\\t');"
+    duckdb -bail ':memory:' "COPY (SELECT sid, sum(count) AS svs_per_sample FROM read_csv('counts/*.tsv.gz', names = ['sid', 'count'], ignore_errors = true) GROUP BY sid) TO 'svs_per_sample.tsv.gz' (DELIMITER '\\t');"
   >>>
 
   output {

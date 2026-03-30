@@ -110,7 +110,7 @@ task MergeCounts {
   }
 
   String merged_counts_name = "svs_per_sample.tsv.gz"
-  String merged_subsets_name = "subset.bcf"
+  String merged_subsets_name = "subset.vcf.gz"
 
   command <<<
     set -o errexit

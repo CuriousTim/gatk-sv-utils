@@ -19,11 +19,13 @@ workflow CountSVsPerSampleAtSites {
   call MergeCounts {
     input:
       counts = CountSVsPerSample.counts,
+      subset_bcfs = CountSVsPerSample.subset_bcf,
       base_docker = base_docker
   }
 
   output {
     File counts = MergeCounts.merged_counts
+    File merged_subsets = MergeCounts.merged_subsets
   }
 }
 
@@ -54,6 +56,7 @@ task CountSVsPerSample {
   }
 
   String counts_name = basename(vcf, ".vcf.gz") + "-counts.tsv.gz"
+  String subset_name = "subset-" + basename(vcf, ".vcf.gz") + ".bcf"
 
   command <<<
     set -o errexit
@@ -62,23 +65,28 @@ task CountSVsPerSample {
 
     vcf='~{vcf}'
     variant_ids='~{variant_ids}'
+    subset_name='~{subset_name}'
     counts_name='~{counts_name}'
 
     mv "${variant_ids}" variants
 
-    bcftools query --include 'ID=@variants' --format '[%SAMPLE\t%GT\n]' "${vcf}" \
+    bcftools view --include 'ID=@variants' --output-type u --output "${subset_name}" "${vcf}"
+
+    bcftools query --format '[%SAMPLE\t%GT\n]' "${subset_name}" \
       | gawk '$2 ~ /\./{next} {split($2, a, "/"); b[$1]+=a[1] + 0 + a[2]} END{for(i in b){print i "\t" b[i]}}' \
       | gzip -c > "${counts_name}"
   >>>
 
   output {
     File counts = counts_name
+    File subset_bcf = subset_name
   }
 }
 
 task MergeCounts {
   input {
     Array[File] counts
+    Array[File] subset_bcfs
     String base_docker
 
     Float? memory_gib
@@ -89,7 +97,7 @@ task MergeCounts {
     Int? boot_disk_gb
   }
 
-  Float disk_size = size(counts, "GB") * 2 + 16
+  Float disk_size = (size(subset_bcfs, "GB") + size(counts, "GB")) * 2 + 16
 
   runtime {
     bootDiskSizeGb: select_first([boot_disk_gb, 8])
@@ -102,6 +110,7 @@ task MergeCounts {
   }
 
   String merged_counts_name = "svs_per_sample.tsv.gz"
+  String merged_subsets_name = "subset.bcf"
 
   command <<<
     set -o errexit
@@ -109,7 +118,9 @@ task MergeCounts {
     set -o pipefail
 
     counts_files='~{write_lines(counts)}'
+    subset_bcfs='~{write_lines(subset_bcfs)}'
     merged_counts_name='~{merged_counts_name}'
+    merged_subsets_name='~{merged_subsets_name}'
 
     mkdir counts
 
@@ -120,9 +131,12 @@ task MergeCounts {
     done < "${counts_files}"
 
     duckdb -bail ':memory:' "COPY (SELECT sid, sum(count) AS svs_per_sample FROM read_csv('counts/*.tsv.gz', names = ['sid', 'count'], ignore_errors = true, union_by_name = true) GROUP BY sid) TO 'svs_per_sample.tsv.gz' (DELIMITER '\\t');"
+
+    bcftools concat --file-list "${subset_bcfs}" --output-type z --output "${merged_subsets_name}"
   >>>
 
   output {
     File merged_counts = merged_counts_name
+    File merged_subsets = merged_subsets_name
   }
 }

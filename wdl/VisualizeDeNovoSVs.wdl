@@ -120,7 +120,7 @@ task BatchVariants {
       ARGIND == 2 { sample_map[$1] = $2 }
       ARGIND == 3 && FNR == 1 { next }
       ARGIND == 3 && !($7 in sample_map) {
-        printf "%s does not have a sample set\n" > "/dev/stderr"
+        printf "%s does not have a sample set\n", $7 > "/dev/stderr"
         exit 1
       }
       ARGIND == 3 {

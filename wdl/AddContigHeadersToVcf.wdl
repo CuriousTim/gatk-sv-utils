@@ -4,7 +4,8 @@ version 1.0
 workflow AddContigHeadersToVcf {
   input {
     Array[File] vcfs
-    File contig_fai
+    # index file (.fai) for an hg38 FASTA file
+    File reference_index
     String base_docker
   }
 
@@ -12,38 +13,37 @@ workflow AddContigHeadersToVcf {
     call AddHeaders {
       input:
         vcf = vcf,
-        contig_fai = contig_fai,
+        reference_index = reference_index,
         base_docker = base_docker
     }
   }
 
   output {
-    Array[File] output_vcfs = AddHeaders.headered_vcf
-    Array[File] output_vcf_indices = AddHeaders.headered_vcf_index
+    Array[File] headered_vcfs = AddHeaders.headered_vcf
+    Array[File] headered_vcf_idxs = AddHeaders.headered_vcf_index
   }
 }
 
 task AddHeaders {
   input {
     File vcf
-    File contig_fai
+    File reference_index
     String base_docker
   }
 
-  Float disk_size = size(vcf, "GB") * 2 + 16
+  Int disk_size = ceil(size(vcf, "GB") * 2) + 16
 
   runtime {
     bootDiskSizeGb: 8
     cpus: 1
-    disks: "local-disk ${ceil(disk_size)}  HDD"
+    disks: "local-disk ${disk_size} HDD"
     docker: base_docker
     maxRetries: 1
     memory: "4 GiB"
     preemptible: 3
   }
 
-  String output_vcf = basename(vcf)
-  String output_vcf_index = basename(vcf) + ".tbi"
+  String headered_vcf_name = basename(vcf)
 
   command <<<
     set -o errexit
@@ -51,16 +51,15 @@ task AddHeaders {
     set -o pipefail
 
     vcf='~{vcf}'
-    contig_fai='~{contig_fai}'
-    output_vcf='~{output_vcf}'
+    reference_index='~{reference_index}'
+    headered_vcf_name='~{headered_vcf_name}'
 
-    bcftools reheader --fai "${contig_fai}" --output "${output_vcf}" \
-      "${vcf}"
-    bcftools index --tbi "${output_vcf}"
+    bcftools reheader --fai "${reference_index}" --output "${headered_vcf_name}" "${vcf}"
+    bcftools index --tbi "${headered_vcf_name}"
   >>>
 
   output {
-    File headered_vcf = "${output_vcf}"
-    File headered_vcf_index = "${output_vcf_index}"
+    File headered_vcf = "${headered_vcf_name}"
+    File headered_vcf_index = "${headered_vcf_name}.tbi"
   }
 }

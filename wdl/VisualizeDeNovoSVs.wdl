@@ -72,6 +72,7 @@ workflow VisualizeDeNovoSVs {
   call MergePlotsTars {
     input:
       plots_tars = select_all(MakePlots.plots_tar),
+      variants = variants,
       merged_tar_prefix = output_tar_prefix,
       base_docker = base_docker
   }
@@ -321,7 +322,7 @@ task MergePlotsTars {
     ARGIND == 1 {
       plots[$1] = $2
     }
-    ARGIND == 2 {
+    ARGIND == 2 && FNR > 1 {
       fn = $5"~~"$7".png"
       if (fn in plots) {
         if ($6 == "INS") {

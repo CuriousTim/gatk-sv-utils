@@ -311,7 +311,7 @@ task MergePlotsTars {
     mkdir store
 
     cat "${plots_tars}" | xargs -I '{}' tar -xf '{}' -C store
-    find store -type f -name '%.png' \
+    find store -type f -name '*.png' \
       | awk -F'/' '{print $NF "\t" $0}' > manifest.tsv
 
     mkdir -p "${merged_tar_prefix}/"{INS,small_CNV,large_CNV,INV,other}
@@ -339,7 +339,8 @@ task MergePlotsTars {
         print ("mv " quote(plots[fn]) " " quote(dest "/" to)) | "sh"
       }
     }' manifest.tsv "${variants}"
-    find store -type f -name 'exclusions.tsv' -exec cat '{}' \; > "${merged_tar_prefix}/exclusions.tsv"
+    find store -type f -name 'exclusions.tsv' -exec cat '{}' \; \
+      | awk '/^sample_id/{if(!f){print; f=1}; next} 1' > "${merged_tar_prefix}/exclusions.tsv"
 
     tar -cf "${merged_tar_prefix}.tar" "${merged_tar_prefix}"
   >>>

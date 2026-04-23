@@ -110,6 +110,7 @@ workflows:
     filters:
       branches:
         - main
+        - testing
       tags:
         - /.*/
   - name: AddContigHeadersToVcf

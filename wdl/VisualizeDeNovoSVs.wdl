@@ -277,6 +277,7 @@ task MakePlots {
 task MergePlotsTars {
   input {
     Array[File] plots_tars
+    File variants
     String merged_tar_prefix
     String base_docker
   }
@@ -304,9 +305,41 @@ task MergePlotsTars {
 
     plots_tars="~{write_lines(plots_tars)}"
     merged_tar_prefix="~{merged_tar_prefix}"
+    variants="~{variants}"
 
-    touch "${merged_tar_prefix}.tar"
-    cat "${plots_tars}" \
-      | xargs tar --concatenate --file="${merged_tar_prefix}.tar"
+    mkdir store
+
+    cat "${plots_tars}" | xargs -I '{}' tar -xf '{}' -C store
+    find store -type f -name '%.png' \
+      | awk -F'/' '{print $NF "\t" $0}' > manifest.tsv
+
+    mkdir "${merged_tar_prefix}/"{INS,small_CNV,large_CNV,INV,other}
+    gawk -F'\t' -v dest="${merged_tar_prefix}" '
+    function quote(x) {
+      return "\047" gensub(/\047/, "\047\\\047\047", "g", x) "\047"
+    }
+    ARGIND == 1 {
+      plots[$1] = $2
+    }
+    ARGIND == 2 {
+      fn = $5"~~"$7".png"
+      if (fn in plots) {
+        if ($6 == "INS") {
+          to = "INS"
+        } else if ($6 ~ /DEL|DUP/ && $4 < 5000) {
+          to = "small_CNV"
+        } else if ($6 ~ /DEL|DUP/ && $4 >= 5000) {
+          to = "large_CNV"
+        } else if ($6 == "INV") {
+          to = "INV"
+        } else {
+          to = "other"
+        }
+        print ("mv " quote(plots[fn]) " " quote(dest "/" to)) | "sh"
+      }
+    }' manifest.tsv "${variants}"
+    find store -type f -name 'exclusions.tsv' -exec cat '{}' \; > "${merged_tar_prefix}/exclusions.tsv"
+
+    tar -cf "${merged_tar_prefix}.tar" "${merged_tar_prefix}"
   >>>
 }

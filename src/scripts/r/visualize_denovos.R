@@ -6,6 +6,8 @@
 # Usage:
 # Rscript visualize_denovos.R <variants> <pedigree> <pe> <sr> <rd> <median_cov> <outdir> <exclusions>
 
+REQ_VARIANT_FIELDS <- c("chr", "start", "end", "svlen", "vid", "svtype", "sample_id")
+
 nzchar2 <- function(x) {
     !is.na(x) && nzchar(x)
 }
@@ -16,29 +18,17 @@ suppressPackageStartupMessages(library(gorilla))
 
 dir.create(argv[[7]])
 
-variants <- fread(
-    argv[[1]],
-    header = FALSE,
-    sep = "\t",
-    colClasses = c(
-        "character",
-        "integer",
-        "integer",
-        "integer",
-        "character",
-        "character",
-        "character"
-    ),
-    col.names = c(
-        "chr",
-        "start",
-        "end",
-        "svlen",
-        "vid",
-        "svtype",
-        "sample_id"
+variants <- fread(argv[[1]], header = TRUE, sep = "\t")
+
+if (!all(REQ_VARIANT_FIELDS %in% colnames(variants))) {
+    stop(
+        paste0(
+            "all of these fields must be in the variant file: ",
+            paste0(REQ_VARIANT_FIELDS, collapse = ", ")
+        ),
+        call. = FALSE
     )
-)
+}
 
 pedigree <- fread(
     argv[[2]],
@@ -133,7 +123,11 @@ for (i in seq_len(nrow(variants))) {
     plotter <- denovo_plotter(trio)
     plot_path <- file.path(argv[[7]], sprintf("%s~~%s.png", v$vid, v$sample_id))
     png(plot_path, width = 3840, height = 2160, res = 300)
-    plot(plotter)
+    if ("o_ev" %in% colnames(v)) {
+        plot(plotter, evtype = v$o_ev)
+    } else {
+        plot(plotter)
+    }
     dev.off()
 }
 

@@ -55,13 +55,23 @@ plot.denovo_plotter <- function(x, y, ...) {
     old_par <- graphics::par(no.readonly = TRUE)
     on.exit(graphics::par(old_par), add = TRUE)
     graphics::layout(matrix(1:5, nrow = 5), heights = c(1.2, 0.3, 0.4, 0.1, 1))
-    # TODO: add evidence types of the call
-    main <- sprintf(
-        "de novo SV (%s)\n%s (%s)",
-        x$svtype,
-        pretty_sample_id(x$trio$child),
-        pretty_size(x$region$end - x$region$start + 1)
-    )
+    dots <- list(...)
+    if ("evtype" %in% names(dots)) {
+        main <- sprintf(
+            "de novo SV (%s)\n%s (%s) [%s]",
+            x$svtype,
+            pretty_sample_id(x$trio$child),
+            pretty_size(x$region$end - x$region$start + 1),
+            dots[["evtype"]]
+        )
+    } else {
+        main <- sprintf(
+            "de novo SV (%s)\n%s (%s)",
+            x$svtype,
+            pretty_sample_id(x$trio$child),
+            pretty_size(x$region$end - x$region$start + 1)
+        )
+    }
 
     trio <- unlist(x$trio)
     graphics::par(mar = c(0, 4.1, 4.1, 2.1), mgp = c(1, 1, 0))

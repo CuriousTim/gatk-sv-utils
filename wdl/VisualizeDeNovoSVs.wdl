@@ -3,6 +3,13 @@ version 1.0
 # Create visualizations for de novo SVs
 workflow VisualizeDeNovoSVs {
   input {
+    # The variants file can be a TSV in one of two formats:
+    # 1. The file has a header line as the first line and there must be columns named chr, start,
+    #    end, svlen, vid, svtype, and sample_id. These columns can be in any order relative to each
+    #    other and there can be other columns.
+    # 2. The file has a header line as the first line and there are exactly seven columns. The names
+    #    can be anything, but they must describe the variant chromosome, start, end, SV length,
+    #    variant ID, SV type and sample ID, in that order.
     File variants
 
     # TSV with sample ID, sample set ID
@@ -119,14 +126,35 @@ task BatchVariants {
         outpaths[$1] = path
       }
       ARGIND == 2 { sample_map[$1] = $2 }
-      ARGIND == 3 && FNR == 1 { next }
-      ARGIND == 3 && !($7 in sample_map) {
-        printf "%s does not have a sample set\n", $7 > "/dev/stderr"
+      ARGIND == 3 && FNR == 1 {
+        header = $0
+        for (i = 1; i <= NF; ++i) {
+          if ($i == "sample_id") {
+            sample_field = i
+          }
+        }
+        if (!sample_field) {
+          if (NF != 7) {
+            print "variants file does not have a \"sample_id\" column" > "/dev/stderr"
+            exit 1
+          } else {
+            header = "chr\tstart\tend\tsvlen\tvid\tsvtype\tsample_id"
+            sample_field = 7
+          }
+        }
+        next
+      }
+      ARGIND == 3 && !($(sample_field) in sample_map) {
+        printf "%s does not have a sample set\n", $(sample_field) > "/dev/stderr"
         exit 1
       }
       ARGIND == 3 {
-        sample_set = sample_map[$7]
+        sample_set = sample_map[$(sample_field)]
         path = outpaths[sample_set]
+        if (!(path in written)) {
+          print header > path
+          written[path]
+        }
         print > path
       }
     ' "${sample_set_id}" "${sample_table}" "${variants}"

@@ -138,7 +138,6 @@ task BatchVariants {
       }
       ARGIND == 2 { sample_map[$1] = $2 }
       ARGIND == 3 && FNR == 1 {
-        header = $0
         for (i = 1; i <= NF; ++i) {
           if ($i == "sample") {
             sample_field = i
@@ -154,6 +153,7 @@ task BatchVariants {
           }
         } else {
           $sample_field = "sample_id"
+          header = $0
         }
         next
       }

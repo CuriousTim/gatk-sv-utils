@@ -5,7 +5,7 @@ workflow VisualizeDeNovoSVs {
   input {
     # The variants file can be a TSV in one of two formats:
     # 1. The file has a header line as the first line and there must be columns named chr, start,
-    #    end, svlen, vid, svtype, and sample_id. These columns can be in any order relative to each
+    #    end, svlen, vid, svtype, and sample. These columns can be in any order relative to each
     #    other and there can be other columns.
     # 2. The file has a header line as the first line and there are exactly seven columns. The names
     #    can be anything, but they must describe the variant chromosome, start, end, SV length,
@@ -120,6 +120,7 @@ task BatchVariants {
 
     mkdir batches
     gawk -F'\t' '
+      BEGIN { OFS = "\t" }
       ARGIND == 1 {
         path = sprintf("batches/%06d.tsv", FNR)
         printf "" > path
@@ -129,18 +130,20 @@ task BatchVariants {
       ARGIND == 3 && FNR == 1 {
         header = $0
         for (i = 1; i <= NF; ++i) {
-          if ($i == "sample_id") {
+          if ($i == "sample") {
             sample_field = i
           }
         }
         if (!sample_field) {
           if (NF != 7) {
-            print "variants file does not have a \"sample_id\" column" > "/dev/stderr"
+            print "variants file does not have a \"sample\" column" > "/dev/stderr"
             exit 1
           } else {
             header = "chr\tstart\tend\tsvlen\tvid\tsvtype\tsample_id"
             sample_field = 7
           }
+        } else {
+          $sample_field = "sample_id"
         }
         next
       }

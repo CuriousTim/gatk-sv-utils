@@ -118,6 +118,16 @@ task BatchVariants {
     sample_table='~{sample_table}'
     sample_set_id='~{write_lines(sample_set_id)}'
 
+    cat2() {
+      local magic_num
+      magic_num="$(head -c 2 "$1" | hexdump -e '1/1 "%x"')"
+      if [[ "${magic_num}" = '1f8b' ]]; then
+        gzip -cd "$1"
+      else
+        cat "$1"
+      fi
+    }
+
     mkdir batches
     gawk -F'\t' '
       BEGIN { OFS = "\t" }
@@ -160,7 +170,7 @@ task BatchVariants {
         }
         print > path
       }
-    ' "${sample_set_id}" "${sample_table}" "${variants}"
+    ' "${sample_set_id}" "${sample_table}" <(cat2 "${variants}")
   >>>
 }
 

@@ -237,7 +237,7 @@ task SubsetEvidence {
 
     # expand all ranges by 50% upstream and downstream so the visualizations
     # can have padding
-    awk -F'\t' '{size=$3-$2+1;pad=int(size / 2);pad=pad<1?1:pad;print $1,$2-pad,$3+pad}' OFS='\t' \
+    awk -F'\t' 'NR>1{size=$3-$2+1;pad=int(size / 2);pad=pad<1?1:pad;print $1,$2-pad,$3+pad}' OFS='\t' \
       "${variants}" \
       | awk -F'\t' 'BEGIN{OFS="\t";OFMT="%.0f"}NR==FNR{a[$1]=$2}NR>FNR{$2=$2<=0?0:$2-1;$3=$3>a[$1]?a[$1]:$3;print}' \
           sequence_lengths.tsv - > padded_coords.bed

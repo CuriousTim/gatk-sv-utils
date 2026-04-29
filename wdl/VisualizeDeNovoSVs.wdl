@@ -120,7 +120,7 @@ task BatchVariants {
 
     cat2() {
       local magic_num
-      magic_num="$(head -c 2 "$1" | hexdump -e '1/1 "%x"')"
+      magic_num="$(od -N 2 -t x1 "$1" | awk 'NF>1{$1=""; gsub(/ /, ""); print}')"
       if [[ "${magic_num}" = '1f8b' ]]; then
         gzip -cd "$1"
       else

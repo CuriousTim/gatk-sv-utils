@@ -79,7 +79,7 @@ workflow VisualizeDeNovoSVs {
   call MergePlotsTars {
     input:
       plots_tars = select_all(MakePlots.plots_tar),
-      variants = variants,
+      variants = BatchVariants.batched_variants,
       merged_tar_prefix = output_tar_prefix,
       base_docker = base_docker
   }
@@ -319,7 +319,7 @@ task MakePlots {
 task MergePlotsTars {
   input {
     Array[File] plots_tars
-    File variants
+    Array[File] variants
     String merged_tar_prefix
     String base_docker
   }
@@ -347,7 +347,7 @@ task MergePlotsTars {
 
     plots_tars="~{write_lines(plots_tars)}"
     merged_tar_prefix="~{merged_tar_prefix}"
-    variants="~{variants}"
+    variants="~{write_lines(variants)}"
 
     mkdir store
 
@@ -363,22 +363,36 @@ task MergePlotsTars {
     ARGIND == 1 {
       plots[$1] = $2
     }
-    ARGIND == 2 && FNR > 1 {
-      fn = $5"~~"$7".png"
-      if (fn in plots) {
-        if ($6 == "INS") {
-          to = "INS"
-        } else if ($6 ~ /DEL|DUP/ && $4 < 5000) {
-          to = "small_CNV"
-        } else if ($6 ~ /DEL|DUP/ && $4 >= 5000) {
-          to = "large_CNV"
-        } else if ($6 == "INV") {
-          to = "INV"
-        } else {
-          to = "other"
+    ARGIND == 2 {
+      fnr = 0
+      while ((getline line < $0) > 0) {
+        ++fnr
+        split(line, a, /\t/)
+        if (fnr == 1) {
+          for (i in a) {
+            header[a[i]] = i
+          }
+          continue
         }
-        print ("mv " quote(plots[fn]) " " quote(dest "/" to)) | "sh"
+        fn = a[header["vid"]] "~~" a[header["sample_id"]] ".png"
+        if (fn in plots) {
+          svtype = a[header["svtype"]]
+          svlen = a[header["svlen"]]
+          if (svtype == "INS") {
+            to = "INS"
+          } else if (svtype ~ /DEL|DUP/ && svlen < 5000) {
+            to = "small_CNV"
+          } else if (svtype ~ /DEL|DUP/ && svlen >= 5000) {
+            to = "large_CNV"
+          } else if (svtype == "INV") {
+            to = "INV"
+          } else {
+            to = "other"
+          }
+          print ("mv " quote(plots[fn]) " " quote(dest "/" to)) | "sh"
+        }
       }
+      close($0)
     }' manifest.tsv "${variants}"
     find store -type f -name 'exclusions.tsv' -exec cat '{}' \; \
       | awk '/^sample_id/{if(!f){print; f=1}; next} 1' > "${merged_tar_prefix}/exclusions.tsv"

@@ -55,23 +55,7 @@ plot.denovo_plotter <- function(x, y, ...) {
     old_par <- graphics::par(no.readonly = TRUE)
     on.exit(graphics::par(old_par), add = TRUE)
     graphics::layout(matrix(1:5, nrow = 5), heights = c(1.2, 0.3, 0.4, 0.1, 1))
-    dots <- list(...)
-    if ("evtype" %in% names(dots)) {
-        main <- sprintf(
-            "de novo SV (%s)\n%s (%s) [%s]",
-            x$svtype,
-            pretty_sample_id(x$trio$child),
-            pretty_size(x$region$end - x$region$start + 1),
-            dots[["evtype"]]
-        )
-    } else {
-        main <- sprintf(
-            "de novo SV (%s)\n%s (%s)",
-            x$svtype,
-            pretty_sample_id(x$trio$child),
-            pretty_size(x$region$end - x$region$start + 1)
-        )
-    }
+    main <- make_denovo_main_string(x, ...)
 
     trio <- unlist(x$trio)
     graphics::par(mar = c(0, 4.1, 4.1, 2.1), mgp = c(1, 1, 0))
@@ -125,4 +109,26 @@ new_denovo_plotter <- function(x) {
         ),
         class = "denovo_plotter"
     )
+}
+
+make_denovo_main_string <- function(x, ...) {
+    dots <- list(...)
+    main <- sprintf("de novo SV (%s)", x$svtype)
+    if (is_integerish(dots[["ac"]]) && length(dots[["ac"]]) == 1 && !is.na(dots[["ac"]])) {
+        main <- paste0(main, sprintf(" [AC = %d]", dots[["ac"]]))
+    }
+    main <- paste0(
+        main,
+        sprintf(
+            "\n%s (%s)",
+            pretty_sample_id(x$trio$child),
+            pretty_size(x$region$end - x$region$start + 1)
+        )
+    )
+
+    if ("evtype" %in% names(dots)) {
+        main <- paste0(main, " [", dots[["evtype"]], "]")
+    }
+
+    main
 }

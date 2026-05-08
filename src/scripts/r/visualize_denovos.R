@@ -123,11 +123,14 @@ for (i in seq_len(nrow(variants))) {
     plotter <- denovo_plotter(trio)
     plot_path <- file.path(argv[[7]], sprintf("%s~~%s.png", v$vid, v$sample_id))
     png(plot_path, width = 3840, height = 2160, res = 300)
+    plot_call <- call("plot", x = quote(plotter))
     if ("o_ev" %in% colnames(v)) {
-        plot(plotter, evtype = v$o_ev)
-    } else {
-        plot(plotter)
+        plot_call[["evtype"]] <- v$o_ev
     }
+    if ("ac" %in% colnames(v)) {
+        plot_call[["ac"]] <- v$ac
+    }
+    eval(plot_call)
     dev.off()
 }
 

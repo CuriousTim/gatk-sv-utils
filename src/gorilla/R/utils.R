@@ -6,6 +6,27 @@ is_number <- function(x) {
     is.numeric(x) && length(x) == 1
 }
 
+is_integerish <- function(x) {
+    if (!typeof(x) %in% c("double", "integer")) {
+        return(FALSE)
+    }
+
+    if (!is.vector(x)) {
+        return(FALSE)
+    }
+
+    non_missing <- x[!is.na(x)]
+    if (any(is.infinite(non_missing))) {
+        return(FALSE)
+    }
+
+    if (!all(non_missing == trunc(non_missing))) {
+        return(FALSE)
+    }
+
+    TRUE
+}
+
 # Add colored rectangles over the left and right sides of a plot where the
 # x-axis is genomic coordinates. The rectangles represent regions of the genome
 # flanking the region of interest.

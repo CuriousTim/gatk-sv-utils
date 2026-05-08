@@ -355,7 +355,7 @@ task MergePlotsTars {
     find store -type f -name '*.png' \
       | awk -F'/' '{print $NF "\t" $0}' > manifest.tsv
 
-    mkdir -p "${merged_tar_prefix}/"{INS,small_CNV,large_CNV,INV,other}
+    mkdir -p "${merged_tar_prefix}/"{INS,small_CNV,large_CNV,INV,other,not_denovo}
     gawk -F'\t' -v dest="${merged_tar_prefix}" '
     function quote(x) {
       return "\047" gensub(/\047/, "\047\\\047\047", "g", x) "\047"
@@ -378,7 +378,9 @@ task MergePlotsTars {
         if (fn in plots) {
           svtype = a[h["svtype"]]
           svlen = a[h["svlen"]]
-          if (svtype == "INS") {
+          if (("is_de_novo" in h) && a[h["is_de_novo"]] == "FALSE") {
+            to = "not_denovo"
+          } else if (svtype == "INS") {
             to = "INS"
           } else if (svtype ~ /DEL|DUP/ && svlen < 5000) {
             to = "small_CNV"

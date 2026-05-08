@@ -121,7 +121,10 @@ for (i in seq_len(nrow(variants))) {
     }
     trio <- svtrio(sve, fam$sample_id, fam$paternal_id, fam$maternal_id)
     plotter <- denovo_plotter(trio)
-    plot_path <- file.path(argv[[7]], sprintf("%s~~%s.png", v$vid, v$sample_id))
+    plot_path <- file.path(
+        argv[[7]],
+        sprintf("%s~~%s~~%s_%d-%d.png", v$vid, v$sample_id, v$chr, v$start, v$end)
+    )
     png(plot_path, width = 3840, height = 2160, res = 300)
     plot_call <- call("plot", x = quote(plotter))
     if ("o_ev" %in% colnames(v)) {

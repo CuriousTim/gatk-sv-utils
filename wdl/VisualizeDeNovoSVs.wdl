@@ -370,14 +370,14 @@ task MergePlotsTars {
         split(line, a, /\t/)
         if (fnr == 1) {
           for (i in a) {
-            header[a[i]] = i
+            h[a[i]] = i
           }
           continue
         }
-        fn = a[header["vid"]] "~~" a[header["sample_id"]] ".png"
+        fn = a[h["vid"]] "~~" a[h["sample_id"]] "~~" a[h["chr"]] "_" a[h["start"]] "-" a[h["end"]] ".png"
         if (fn in plots) {
-          svtype = a[header["svtype"]]
-          svlen = a[header["svlen"]]
+          svtype = a[h["svtype"]]
+          svlen = a[h["svlen"]]
           if (svtype == "INS") {
             to = "INS"
           } else if (svtype ~ /DEL|DUP/ && svlen < 5000) {

@@ -82,7 +82,10 @@ new_denovo_plotter <- function(x) {
 
     pe <- new_pe_plotter(x$evidence$pe)
     sr <- new_sr_plotter(x$evidence$sr)
-    rd <- new_rd_plotter(x$evidence$rd)
+    rd <- new_rd_plotter(
+        x$evidence$rd,
+        median_region = x$evidence$region
+    )
 
     genes <- new_genes_plotter(
         x$evidence$region$contig,

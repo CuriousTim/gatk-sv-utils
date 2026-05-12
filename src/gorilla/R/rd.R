@@ -75,6 +75,24 @@ print.rd_mat <- function(x, ...) {
     cat(sprintf("samples: %d\n", ncol(x$mat)))
 }
 
+#' @importFrom stats median
+#' @export
+median.rd_mat <- function(x, na.rm = FALSE, region = NULL, ...) {
+    if (!is.null(region)) {
+        gr <- GenomicRanges::GRanges(region$contig, IRanges::IRanges(region$start, region$end))
+        rows <- suppressWarnings(GenomicRanges::findOverlaps(gr, x$ranges)) |>
+            S4Vectors::subjectHits()
+
+        if (length(rows) == 0) {
+            return(stats::setNames(rep(NA_real_, ncol(x$mat)), colnames(x$mat)))
+        }
+    } else {
+        rows <- NULL
+    }
+
+    matrixStats::colMedians(x$mat, rows = rows, na.rm = na.rm)
+}
+
 smooth_rd <- function(x, n) {
     mat <- x$mat
     if (nrow(x$mat) >= n) {

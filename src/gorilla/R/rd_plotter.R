@@ -17,6 +17,10 @@ MIN_PLOT_INTERVALS <- 100
 #' A `rd_plotter` can create a visualization of read depth.
 #'
 #' @param x A [`rd_mat`][query()] object.
+#' @param median_region A list with components `contig`, `start`, and `end`
+#'   to indicate that the median normalized read depth of that region for each
+#'   sample should be included in the plot. If `NULL`, the medians will not be
+#'   included.
 #' @returns A `rd_plotter` object.
 #' @export
 #'
@@ -38,8 +42,16 @@ MIN_PLOT_INTERVALS <- 100
 #' rd <- rd_file(rd_path, rd_medians)
 #' mat <- query(rd, "chr16", 28743149, 28745149)
 #' plotter <- rd_plotter(mat)
-rd_plotter <- function(x) {
-    new_rd_plotter(x)
+rd_plotter <- function(x, median_region = NULL) {
+    if (!is.null(median_region)) {
+        if (!is.list(median_region)) {
+            stop("`median_region` must be `NULL` or a list")
+        } else if (!all(c("contig", "start", "end") %in% names(median_region))) {
+            stop("`median_region` must have 'contig', 'start', and 'end'")
+        }
+    }
+
+    new_rd_plotter(x, median_region)
 }
 
 #' Plot a `rd_plotter` object
@@ -114,8 +126,27 @@ plot.rd_plotter <- function(
         main = main
     )
 
+    draw_sample_medians(x, samples, col)
     draw_bg_samples_rd(x, bg_samples)
     draw_samples_rd(x, samples, col)
+}
+
+draw_sample_medians <- function(x, samples, col) {
+    if (is.null(x$medians)) {
+        return()
+    }
+
+    cols_mat <- grDevices::col2rgb(col)
+    cols <- apply(cols_mat, 2, \(x) grDevices::rgb(x[[1]], x[[2]], x[[3]], 150, maxColorValue = 255))
+    graphics::segments(
+        x0 = x$median_region$start,
+        y0 = x$medians[samples],
+        x1 = x$median_region$end,
+        y1 = x$medians[samples],
+        col = cols,
+        lty = 2,
+        lwd = 2
+    )
 }
 
 draw_samples_rd <- function(x, samples, color) {
@@ -148,8 +179,14 @@ draw_bg_samples_rd <- function(x, bg_samples) {
     }
 }
 
-new_rd_plotter <- function(x) {
+new_rd_plotter <- function(x, median_region) {
     stopifnot(inherits(x, "rd_mat"))
+
+    if (!is.null(median_region)) {
+        medians <- median(x, region = median_region)
+    } else {
+        medians <- NULL
+    }
 
     if (x$region$end - x$region$start + 1 >= MIN_SMOOTH_REGION) {
         x <- smooth_rd(x, SMOOTHING_WINDOW)
@@ -163,7 +200,9 @@ new_rd_plotter <- function(x) {
             bins_to_plot = bins_to_plot,
             bin_mids = bin_mids,
             mat = x$mat,
-            region = x$region
+            region = x$region,
+            medians = medians,
+            median_region = median_region
         ),
         class = "rd_plotter"
     )

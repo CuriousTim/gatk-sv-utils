@@ -4,10 +4,15 @@
 \alias{rd_plotter}
 \title{Create a new \code{rd_plotter} object}
 \usage{
-rd_plotter(x)
+rd_plotter(x, median_region = NULL)
 }
 \arguments{
 \item{x}{A \code{\link[=query]{rd_mat}} object.}
+
+\item{median_region}{A list with components \code{contig}, \code{start}, and \code{end}
+to indicate that the median normalized read depth of that region for each
+sample should be included in the plot. If \code{NULL}, the medians will not be
+included.}
 }
 \value{
 A \code{rd_plotter} object.

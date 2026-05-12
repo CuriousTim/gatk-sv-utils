@@ -1,7 +1,10 @@
 # Retrieve gene and segmental duplication annotations from UCSC
 
+library(data.table)
 library(GenomicRanges)
 library(UCSC.utils)
+
+PRIMARY_CHROMS <- paste0("chr", c(1:22, "X", "Y"))
 
 genes <- fetch_UCSC_track_data("hg38", "knownGene")
 genes <- as.data.table(genes)
@@ -31,7 +34,7 @@ genes_gr <- GRanges(
 
 # fracMatch: fraction of matching bases (similarity)
 segdups <- fetch_UCSC_track_data("hg38", "genomicSuperDups")
-segdups <- segdups[segdups$chrom %in% paste0("chr", c(1:22, "X", "Y")), ]
+segdups <- segdups[segdups$chrom %in% PRIMARY_CHROMS, ]
 segdups_gr <- GRanges(
     segdups$chrom,
     IRanges(segdups$chromStart + 1L, segdups$chromEnd),
@@ -39,4 +42,21 @@ segdups_gr <- GRanges(
     fracMatch = segdups$fracMatch
 )
 
-usethis::use_data(genes_gr, segdups_gr, internal = TRUE, overwrite = TRUE)
+simple_repeats <- fetch_UCSC_track_data("hg38", "simpleRepeat")
+simple_repeats <- simple_repeats[simple_repeats$chrom %in% PRIMARY_CHROMS, ]
+simple_repeats_gr <- GRanges(
+    simple_repeats$chrom,
+    IRanges(simple_repeats$chromStart + 1L, simple_repeats$chromEnd)
+)
+
+repeat_mask <- fetch_UCSC_track_data("hg38", "rmsk")
+repeat_mask <- repeat_mask[repeat_mask$genoName %in% PRIMARY_CHROMS, ]
+repeat_mask_gr <- GRanges(
+    repeat_mask$genoName,
+    IRanges(repeat_mask$genoStart + 1L, repeat_mask$genoEnd)
+)
+
+usethis::use_data(
+    genes_gr, segdups_gr, simple_repeats_gr, repeat_mask_gr,
+    internal = TRUE, overwrite = TRUE, compress = "xz"
+)

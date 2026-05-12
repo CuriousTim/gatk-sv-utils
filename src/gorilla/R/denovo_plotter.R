@@ -70,7 +70,7 @@ plot.denovo_plotter <- function(x, y, ...) {
     plot(x$rd, samples = trio, col = TRIO_COLORS)
     draw_padding(x$region$start, x$region$end)
 
-    plot(x$segdups)
+    plot(x$repeats)
 
     graphics::par(mar = c(3.1, 4.1, 0, 2.1))
     plot(x$genes)
@@ -90,7 +90,7 @@ new_denovo_plotter <- function(x) {
         x$evidence$region$qend
     )
 
-    segdups <- new_segdups_plotter(
+    repeats <- new_repeats_plotter(
         x$evidence$region$contig,
         x$evidence$region$qstart,
         x$evidence$region$qend
@@ -102,7 +102,7 @@ new_denovo_plotter <- function(x) {
             sr = sr,
             rd = rd,
             genes = genes,
-            segdups = segdups,
+            repeats = repeats,
             svtype = x$evidence$svtype,
             region = x$evidence$region,
             trio = x$trio

@@ -2,8 +2,14 @@ new_repeats_plotter <- function(contig, start, end) {
     query <- GenomicRanges::GRanges(contig, IRanges::IRanges(start, end))
     # supress warnings about not having sequence levels in common
     sd_ovps <- suppressWarnings(GenomicRanges::findOverlaps(query, segdups_gr))
-    sr_ovps <- suppressWarnings(GenomicRanges::findOverlaps(query, simple_repeats_gr))
-    rm_ovps <- suppressWarnings(GenomicRanges::findOverlaps(query, repeat_mask_gr))
+    sr_ovps <- suppressWarnings(GenomicRanges::findOverlaps(
+        query,
+        simple_repeats_gr
+    ))
+    rm_ovps <- suppressWarnings(GenomicRanges::findOverlaps(
+        query,
+        repeat_mask_gr
+    ))
 
     segdups <- segdups_gr[S4Vectors::subjectHits(sd_ovps)] |>
         GenomicRanges::reduce()
@@ -72,6 +78,7 @@ plot.repeats_plotter <- function(x, y, ...) {
     graphics::text(
         rep(x$region$end - (x$region$end - x$region$start + 1) * 0.001, 3),
         c(2.5, 5.5, 8.5),
-        labels = c("SD", "RM", "SR"), adj = c(1, 0.5)
+        labels = c("SD", "RM", "SR"),
+        adj = c(1, 0.5)
     )
 }

@@ -46,7 +46,9 @@ rd_plotter <- function(x, median_region = NULL) {
     if (!is.null(median_region)) {
         if (!is.list(median_region)) {
             stop("`median_region` must be `NULL` or a list")
-        } else if (!all(c("contig", "start", "end") %in% names(median_region))) {
+        } else if (
+            !all(c("contig", "start", "end") %in% names(median_region))
+        ) {
             stop("`median_region` must have 'contig', 'start', and 'end'")
         }
     }
@@ -137,7 +139,9 @@ draw_sample_medians <- function(x, samples, col) {
     }
 
     cols_mat <- grDevices::col2rgb(col)
-    cols <- apply(cols_mat, 2, \(x) grDevices::rgb(x[[1]], x[[2]], x[[3]], 150, maxColorValue = 255))
+    cols <- apply(cols_mat, 2, \(x) {
+        grDevices::rgb(x[[1]], x[[2]], x[[3]], 150, maxColorValue = 255)
+    })
     graphics::segments(
         x0 = x$median_region$start,
         y0 = x$medians[samples],

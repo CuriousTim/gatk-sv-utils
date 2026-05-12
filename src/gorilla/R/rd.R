@@ -79,7 +79,10 @@ print.rd_mat <- function(x, ...) {
 #' @export
 median.rd_mat <- function(x, na.rm = FALSE, region = NULL, ...) {
     if (!is.null(region)) {
-        gr <- GenomicRanges::GRanges(region$contig, IRanges::IRanges(region$start, region$end))
+        gr <- GenomicRanges::GRanges(
+            region$contig,
+            IRanges::IRanges(region$start, region$end)
+        )
         rows <- suppressWarnings(GenomicRanges::findOverlaps(gr, x$ranges)) |>
             S4Vectors::subjectHits()
 

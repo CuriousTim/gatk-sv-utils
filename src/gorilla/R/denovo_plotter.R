@@ -117,7 +117,11 @@ new_denovo_plotter <- function(x) {
 make_denovo_main_string <- function(x, ...) {
     dots <- list(...)
     main <- sprintf("de novo SV (%s)", x$svtype)
-    if (is_integerish(dots[["ac"]]) && length(dots[["ac"]]) == 1 && !is.na(dots[["ac"]])) {
+    if (
+        is_integerish(dots[["ac"]]) &&
+            length(dots[["ac"]]) == 1 &&
+            !is.na(dots[["ac"]])
+    ) {
         main <- paste0(main, sprintf(" [AC = %d]", dots[["ac"]]))
     }
     main <- paste0(

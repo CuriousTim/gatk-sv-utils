@@ -325,7 +325,7 @@ task MergePlotsTars {
   }
 
   output {
-    File merged_plots_tar = "${merged_tar_prefix}.tar"
+    File merged_plots_tar = "${merged_tar_prefix}.tar.gz"
   }
 
   Float disk_size = size(plots_tars, "GB") * 3 + 16
@@ -399,6 +399,6 @@ task MergePlotsTars {
     find store -type f -name 'exclusions.tsv' -exec cat '{}' \; \
       | awk '/^sample_id/{if(!f){print; f=1}; next} 1' > "${merged_tar_prefix}/exclusions.tsv"
 
-    tar -cf "${merged_tar_prefix}.tar" "${merged_tar_prefix}"
+    tar -czf "${merged_tar_prefix}.tar.gz" "${merged_tar_prefix}"
   >>>
 }

@@ -378,7 +378,7 @@ task MergePlotsTars {
         if (fn in plots) {
           svtype = a[h["svtype"]]
           svlen = a[h["svlen"]]
-          if (("is_de_novo" in h) && (a[h["is_de_novo"]] == "false" || a[h["is_de_novo"]] == "FALSE") {
+          if (("is_de_novo" in h) && (a[h["is_de_novo"]] == "false" || a[h["is_de_novo"]] == "FALSE")) {
             to = "not_denovo"
           } else if (svtype == "INS") {
             to = "INS"

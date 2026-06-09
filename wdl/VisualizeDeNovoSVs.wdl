@@ -19,8 +19,8 @@ workflow VisualizeDeNovoSVs {
     Array[File] merged_pe_index
     Array[File] merged_sr
     Array[File] merged_sr_index
-    Array[File] merged_bincov
-    Array[File] merged_bincov_index
+    Array[File] merged_rd
+    Array[File] merged_rd_index
     Array[File] median_cov
     Array[String] sample_set_id
 
@@ -44,31 +44,22 @@ workflow VisualizeDeNovoSVs {
       base_docker = base_docker
   }
 
+  call MakeEvidenceManifest {
+    input:
+      sample_set_id = sample_set_id,
+      merged_pe = merged_pe,
+      merged_sr = merged_sr,
+      merged_rd = merged_rd,
+      median_cov = median_cov,
+      base_docker = base_docker
+  }
+
   scatter (i in range(length(BatchVariants.batched_variants))) {
     if (size(BatchVariants.batched_variants[i]) > 0) {
-      call SubsetEvidence {
-        input:
-          variants = BatchVariants.batched_variants[i],
-          merged_pe = merged_pe[i],
-          merged_pe_index = merged_pe_index[i],
-          merged_sr = merged_sr[i],
-          merged_sr_index = merged_sr_index[i],
-          merged_bincov = merged_bincov[i],
-          merged_bincov_index = merged_bincov_index[i],
-          sequence_dict = sequence_dict,
-          gatk_docker = gatk_docker
-      }
-
       call MakePlots {
         input:
           variants = BatchVariants.batched_variants[i],
-          merged_pe = SubsetEvidence.subset_pe,
-          merged_pe_index = SubsetEvidence.subset_pe_index,
-          merged_sr = SubsetEvidence.subset_sr,
-          merged_sr_index = SubsetEvidence.subset_sr_index,
-          merged_bincov = SubsetEvidence.subset_bincov,
-          merged_bincov_index = SubsetEvidence.subset_bincov_index,
-          median_cov = median_cov[i],
+          evidence_manifest = MakeEvidenceManifest.evidence_manifest,
           sample_set_id = sample_set_id[i],
           pedigree = pedigree,
           r_docker = r_docker
@@ -174,50 +165,27 @@ task BatchVariants {
   >>>
 }
 
-task SubsetEvidence {
+task MakeEvidenceManifest {
   input {
-    File variants
-    File merged_pe
-    File merged_pe_index
-    File merged_sr
-    File merged_sr_index
-    File merged_bincov
-    File merged_bincov_index
-    File sequence_dict
-    String gatk_docker
-  }
-
-  parameter_meta {
-    merged_pe: {
-      description: "Sample set PE matrix",
-      localization_optional: true
-    }
-    merged_sr: {
-      description: "Sample set SR matrix",
-      localization_optional: true
-    }
-    merged_bincov: {
-      description: "Sample set RD matrix",
-      localization_optional: true
-    }
+    Array[String] sample_set_id
+    Array[String] merged_pe
+    Array[String] merged_sr
+    Array[String] merged_rd
+    Array[String] median_cov
+    String base_docker
   }
 
   output {
-    File subset_pe = "subset.PE.txt.gz"
-    File subset_pe_index = "subset.PE.txt.gz.tbi"
-    File subset_sr = "subset.SR.txt.gz"
-    File subset_sr_index = "subset.SR.txt.gz.tbi"
-    File subset_bincov = "subset.RD.txt.gz"
-    File subset_bincov_index = "subset.RD.txt.gz.tbi"
+    File evidence_manifest = "evidence_manifest.tsv"
   }
 
   runtime {
     bootDiskSizeGb: 8
-    cpu: 4
-    disks: "local-disk 256 HDD"
-    docker: gatk_docker
+    cpu: 1
+    disks: "local-disk 64 HDD"
+    docker: base_docker
     maxRetries: 1
-    memory: "16 GiB"
+    memory: "2 GiB"
     preemptible: 3
   }
 
@@ -226,53 +194,21 @@ task SubsetEvidence {
     set -o nounset
     set -o pipefail
 
-    variants="~{variants}"
-    merged_pe="~{merged_pe}"
-    merged_sr="~{merged_sr}"
-    merged_bincov="~{merged_bincov}"
-    sequence_dict="~{sequence_dict}"
+    sample_set_id='~{write_lines(sample_set_id)}'
+    merged_pe='~{write_lines(merged_pe)}'
+    merged_sr='~{write_lines(merged_sr)}'
+    merged_rd='~{write_lines(merged_rd)}'
+    median_cov='~{write_lines(median_cov)}'
 
-    awk -F'\t' '/^@SQ/{sub(/^SN:/, "", $2); sub(/^LN:/, "", $3); print $2,$3}' \
-      OFS='\t' "${sequence_dict}" > sequence_lengths.tsv
-
-    # expand all ranges by 50% upstream and downstream so the visualizations
-    # can have padding
-    awk -F'\t' 'NR>1{size=$3-$2+1;pad=int(size / 2);pad=pad<1?1:pad;print $1,$2-pad,$3+pad}' OFS='\t' \
-      "${variants}" \
-      | awk -F'\t' 'BEGIN{OFS="\t";OFMT="%.0f"}NR==FNR{a[$1]=$2}NR>FNR{$2=$2<=0?0:$2-1;$3=$3>a[$1]?a[$1]:$3;print}' \
-          sequence_lengths.tsv - > padded_coords.bed
-
-    gatk --java-options "-Xmx6G" PrintSVEvidence \
-      --evidence-file  "${merged_pe}" \
-      --interval-merging-rule ALL \
-      --intervals padded_coords.bed \
-      --sequence-dictionary "${sequence_dict}" \
-      --output "subset.PE.txt.gz"
-    gatk --java-options "-Xmx6G" PrintSVEvidence \
-      --evidence-file  "${merged_sr}" \
-      --interval-merging-rule ALL \
-      --intervals padded_coords.bed \
-      --sequence-dictionary "${sequence_dict}" \
-      --output "subset.SR.txt.gz"
-    gatk --java-options "-Xmx6G" PrintSVEvidence \
-      --evidence-file  "${merged_bincov}" \
-      --interval-merging-rule ALL \
-      --intervals padded_coords.bed \
-      --sequence-dictionary "${sequence_dict}" \
-      --output "subset.RD.txt.gz"
+    paste "${sample_set_id}" "${merged_pe}" "${merged_sr}" "${merged_rd}" \
+      "${median_cov}" > 'evidence_manifest.tsv'
   >>>
 }
 
 task MakePlots {
   input {
     File variants
-    File merged_pe
-    File merged_pe_index
-    File merged_sr
-    File merged_sr_index
-    File merged_bincov
-    File merged_bincov_index
-    File median_cov
+    File evidence_manifest
     String sample_set_id
     File pedigree
     String r_docker
@@ -282,12 +218,10 @@ task MakePlots {
     File plots_tar = "${sample_set_id}.tar"
   }
 
-  Float disk_size = size([merged_pe, merged_sr, merged_bincov, median_cov], "GB") * 1.5 + 32
-
   runtime {
     bootDiskSizeGb: 8
     cpu: 2
-    disks: "local-disk ${ceil(disk_size)} HDD"
+    disks: "local-disk 64 HDD"
     docker: r_docker
     maxRetries: 1
     memory: "16 GiB"
@@ -300,16 +234,13 @@ task MakePlots {
     set -o pipefail
 
     variants="~{variants}"
-    merged_pe="~{merged_pe}"
-    merged_sr="~{merged_sr}"
-    merged_bincov="~{merged_bincov}"
-    median_cov="~{median_cov}"
+    evidence_manifest="~{evidence_manifest}"
     sample_set_id="~{sample_set_id}"
     pedigree="~{pedigree}"
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_denovos.R \
-      "${variants}" "${pedigree}" "${merged_pe}" "${merged_sr}" "${merged_bincov}" \
-      "${median_cov}" "${sample_set_id}" exclusions.tsv
+      "${variants}" "${pedigree}" "${evidence_manifest}" "${sample_set_id}" \
+      exclusions.tsv
 
     mv exclusions.tsv "${sample_set_id}/exclusions.tsv"
     tar -cf "${sample_set_id}.tar" "${sample_set_id}"

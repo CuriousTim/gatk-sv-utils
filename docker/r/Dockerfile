@@ -2,6 +2,7 @@ FROM rocker/r-ver:4.5.1
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
+    autoconf \
     git \
     libcurl4-openssl-dev \
     libbz2-dev \

@@ -27,7 +27,7 @@ RUN cd /opt \
   && make install \
   && cd /opt \
   && rm -rf htslib \
-  && apt-get remove git
+  && apt-get remove -y git autoconf automake
 
 RUN R -e 'withCallingHandlers(install.packages("remotes"), warning = function(w) stop(w))'
 

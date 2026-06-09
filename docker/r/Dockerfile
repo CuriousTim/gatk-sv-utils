@@ -7,6 +7,7 @@ RUN apt-get update \
     git \
     libcurl4-openssl-dev \
     libbz2-dev \
+    libdeflate-dev \
     liblzma-dev \
     libssl-dev \
     libxml2-dev \

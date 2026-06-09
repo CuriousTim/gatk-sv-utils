@@ -91,7 +91,7 @@ evidence_paths <- fread(
 samples <- fread(
     argv[[4]], header = FALSE, sep = "\t",
     colClasses = c("character", "character"),
-    col.names = c("batch_id", "sample_id"),
+    col.names = c("sample_id", "batch_id"),
     key = "sample_id"
 )
 

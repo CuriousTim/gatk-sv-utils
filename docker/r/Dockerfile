@@ -10,6 +10,7 @@ RUN apt-get update \
     libdeflate-dev \
     liblzma-dev \
     libssl-dev \
+    libuv1-dev \
     libxml2-dev \
     zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*

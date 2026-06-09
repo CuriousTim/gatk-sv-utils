@@ -58,11 +58,10 @@ medians_path <- system.file(
     package = "gorilla",
     mustWork = TRUE
 )
-rd_medians <- read_median_coverages(medians_path)
 
 pe <- pe_file(pe_path)
 sr <- sr_file(sr_path)
-rd <- rd_file(rd_path, rd_medians)
+rd <- rd_file(rd_path, medians_path)
 
 sv <- svevidence("chr16", 28743149, 28745149, pe, sr, rd, "DUP")
 }

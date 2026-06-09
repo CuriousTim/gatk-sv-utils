@@ -7,7 +7,7 @@
 \method{plot}{pe_plotter}(x, y, samples, main = "", col = "#000000", ...)
 }
 \arguments{
-\item{x}{A \code{\link[=pe_plotter]{pe_plotter}} object.}
+\item{x}{A \code{\link{pe_plotter}} object.}
 
 \item{y}{Ignored.}
 

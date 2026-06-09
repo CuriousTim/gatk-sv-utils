@@ -38,8 +38,7 @@ MIN_PLOT_INTERVALS <- 100
 #'     mustWork = TRUE
 #' )
 #'
-#' rd_medians <- read_median_coverages(medians_path)
-#' rd <- rd_file(rd_path, rd_medians)
+#' rd <- rd_file(rd_path, medians_path)
 #' mat <- query(rd, "chr16", 28743149, 28745149)
 #' plotter <- rd_plotter(mat)
 rd_plotter <- function(x, median_region = NULL) {
@@ -90,9 +89,7 @@ rd_plotter <- function(x, median_region = NULL) {
 #'     mustWork = TRUE
 #' )
 #'
-#' rd_medians <- read_median_coverages(medians_path)
-#'
-#' rd <- rd_file(rd_path, rd_medians)
+#' rd <- rd_file(rd_path, medians_path)
 #' mat <- query(rd, "chr16", 28743149, 28745149)
 #' plotter <- rd_plotter(mat)
 #' plot(plotter, samples = c("gorilla0000", "gorilla0001"))

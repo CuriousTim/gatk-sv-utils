@@ -4,7 +4,27 @@
 # in the same batch.
 #
 # Usage:
-# Rscript visualize_denovos.R <variants> <pedigree> <pe> <sr> <rd> <median_cov> <outdir> <exclusions>
+# Rscript visualize_denovos.R <variants> <pedigree> <evidence> <batches> <outdir> <exclusions>
+#
+# <variants>
+# TSV of variants to visualize
+#
+# <pedigree>
+# Pedigree in GATK PED format
+#
+# <evidence>
+# TSV with paths to the SV evidence files with columns in the order
+# batch ID, PE, SR, RD, median cov
+#
+# <batches>
+# TSV with mapping between batch IDs and sample IDs in the order
+# batch ID, sample ID
+#
+# <outdir>
+# Directory to write the plots
+#
+# <exclusions>
+# File to write variants that were skipped
 
 REQ_VARIANT_FIELDS <- c("chr", "start", "end", "svlen", "vid", "svtype", "sample_id")
 
@@ -16,8 +36,9 @@ argv <- commandArgs(trailingOnly = TRUE)
 
 suppressPackageStartupMessages(library(gorilla))
 
-dir.create(argv[[7]])
+dir.create(argv[[5]])
 
+# read variants to visualize
 variants <- fread(argv[[1]], header = TRUE, sep = "\t")
 
 if (!all(REQ_VARIANT_FIELDS %in% colnames(variants))) {
@@ -30,6 +51,7 @@ if (!all(REQ_VARIANT_FIELDS %in% colnames(variants))) {
     )
 }
 
+# read pedigree
 pedigree <- fread(
     argv[[2]],
     header = FALSE,
@@ -53,12 +75,33 @@ pedigree <- fread(
     key = "sample_id"
 )
 
-pe <- pe_file(argv[[3]])
-sr <- sr_file(argv[[4]])
-rd_medians <- read_median_coverages(argv[[6]])
-rd <- rd_file(argv[[5]], rd_medians)
-exclusions_fp <- file(argv[[8]], open = "wt")
+# read PE/SR/RD/medians paths
+evidence_paths <- fread(
+    argv[[3]], header = FALSE, sep = "\t",
+    colClasses = c(
+        "character", "character", "character", "character", "character"
+    ),
+    col.names = c(
+        "batch_id", "pe_path", "sr_path", "rd_path", "medians_path"
+    ),
+    key = "batch_id"
+)
+
+# sample to batch mapping
+samples <- fread(
+    argv[[4]], header = FALSE, sep = "\t",
+    colClasses = c("character", "character"),
+    col.names = c("batch_id", "sample_id"),
+    key = "sample_id"
+)
+
+exclusions_fp <- file(argv[[6]], open = "wt")
 writeLines("sample_id\tvid\texclusion_reason", exclusions_fp)
+
+tmpdir <- tempfile("temp", ".")
+if (!dir.create(tmpdir, showWarnings = FALSE)) {
+    stop("failed to create temporary directory in working directory")
+}
 
 for (i in seq_len(nrow(variants))) {
     v <- variants[i, ]
@@ -80,49 +123,86 @@ for (i in seq_len(nrow(variants))) {
         next
     }
 
-    if (!v$sample_id %in% names(rd_medians)) {
-        writeLines(
-            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "sample missing from evidence"),
-            exclusions_fp
-        )
-        next
+    child_batch <- samples[fam$sample_id, batch_id, nomatch = NULL]
+    paternal_batch <- samples[fam$paternal_id, batch_id, nomatch = NULL]
+    maternal_batch <- samples[fam$maternal_id, batch_id, nomatch = NULL]
+
+    child_evidence_paths <- evidence_paths[child_batch, nomatch = NULL]
+    if (nrow(child_evidence_paths) == 0) {
+        stop(sprintf("batch '%s' has no evidence files", child_batch))
+    }
+    paternal_evidence_paths <- evidence_paths[paternal_batch, nomatch = NULL]
+    if (nrow(paternal_evidence_paths) == 0) {
+        stop(sprintf("batch '%s' has no evidence files", paternal_batch))
+    }
+    maternal_evidence_paths <- evidence_paths[maternal_batch, nomatch = NULL]
+    if (nrow(maternal_evidence_paths) == 0) {
+        stop(sprintf("batch '%s' has no evidence files", maternal_batch))
     }
 
-    if (!fam$paternal_id %in% names(rd_medians)) {
-        writeLines(
-            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "father missing from evidence"),
-            exclusions_fp
-        )
-        next
-    }
-
-    if (!fam$maternal_id %in% names(rd_medians)) {
-        writeLines(
-            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "mother missing from evidence"),
-            exclusions_fp
-        )
-        next
-    }
-
+    child_cachedir <- file.path(tmpdir, child_batch)
+    child_pe <- pe_file(child_evidence_paths$pe_path, child_cachedir)
+    child_sr <- sr_file(child_evidence_paths$sr_path, child_cachedir)
+    child_rd <- rd_file(
+        child_evidence_paths$rd_path,
+        child_evidence_paths$medians_path,
+        child_cachedir
+    )
     # INS start to end length is always 1b which is not long enough to
     # visualize anything so we add 1Kb padding.
-    sve <- tryCatch(
-        svevidence(v$chr, v$start, v$end, pe, sr, rd, v$svtype, pad = if (v$svtype == "INS") 1000 else 0.3),
-        scanTabix_io = function(e) {
-            writeLines(
-                sprintf("%s\t%s\t%s", v$sample_id, v$vid, "error querying evidence files"),
-                exclusions_fp
-            )
-            NULL
-        }
+    child_batch_svevidence <- svevidence(
+        v$chr, v$start, v$end, child_pe, child_sr, child_rd, v$svtype,
+        pad = if (v$svtype == "INS") 1000 else 0.3
     )
-    if (is.null(sve)) {
-        next
+
+    child_svevidence <- subset_samples(child_batch_svevidence, fam$sample_id)
+
+    if (paternal_batch == child_batch) {
+        paternal_svevdience <- subset_samples(child_batch_svevidence, fam$paternal_id)
+    } else {
+        paternal_cachedir <- file.path(tmpdir, paternal_batch)
+        paternal_pe <- pe_file(paternal_evidence_paths$pe_path, paternal_cachedir)
+        paternal_sr <- sr_file(paternal_evidence_paths$sr_path, paternal_cachedir)
+        paternal_rd <- rd_file(
+            paternal_evidence_paths$rd_path,
+            paternal_evidence_paths$medians_path,
+            paternal_cachedir
+        )
+        paternal_batch_svevidence <- svevidence(
+            v$chr, v$start, v$end, paternal_pe, paternal_sr, paternal_rd, v$svtype,
+            pad = if (v$svtype == "INS") 1000 else 0.3
+        )
+        paternal_svevidence <- subset_samples(paternal_batch_svevidence, fam$paternal_id)
     }
+
+    if (maternal_batch == child_batch) {
+        maternal_svevidence <- subset_samples(child_batch_svevidence, fam$maternal_id)
+    } else if (maternal_batch == paternal_batch) {
+        maternal_svevidence <- subset_samples(paternal_batch_svevidence, fam$maternal_id)
+    } else {
+        # to save memory
+        rm(child_batch_svevidence, paternal_batch_svevidence)
+        maternal_cachedir <- file.path(tmpdir, maternal_batch)
+        maternal_pe <- pe_file(maternal_evidence_paths$pe_path, maternal_cachedir)
+        maternal_sr <- sr_file(maternal_evidence_paths$sr_path, maternal_cachedir)
+        maternal_rd <- rd_file(
+            maternal_evidence_paths$rd_path,
+            maternal_evidence_paths$medians_path,
+            maternal_cachedir
+        )
+        maternal_batch_svevidence <- svevidence(
+            v$chr, v$start, v$end, maternal_pe, maternal_sr, maternal_rd, v$svtype,
+            pad = if (v$svtype == "INS") 1000 else 0.3
+        )
+        maternal_svevidence <- subset_samples(maternal_batch_svevidence, fam$maternal_id)
+    }
+
+    sve <- c(child_svevidence, paternal_svevidence, maternal_svevidence)
+
     trio <- svtrio(sve, fam$sample_id, fam$paternal_id, fam$maternal_id)
     plotter <- denovo_plotter(trio)
     plot_path <- file.path(
-        argv[[7]],
+        argv[[5]],
         sprintf("%s~~%s~~%s_%d-%d.png", v$vid, v$sample_id, v$chr, v$start, v$end)
     )
     png(plot_path, width = 3840, height = 2160, res = 300)

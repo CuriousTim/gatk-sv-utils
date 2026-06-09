@@ -32,13 +32,13 @@ An object representing the queried region.
 representing some on-disk file indexed by genomic coordinates.
 }
 \details{
-The method for \code{\link[=rd_file]{rd_file}} retrieves all the bins
+The method for \code{\link{rd_file}} retrieves all the bins
 overlapping a region from the RD matrix and returns an \code{rd_mat} object.
 
-The method for \code{\link[=sr_file]{sr_file}} retrieves all split read alignments
+The method for \code{\link{sr_file}} retrieves all split read alignments
 overlapping a region from the SR matrix and returns an \code{sr_mat} object.
 
-The method for \code{\link[=pe_file]{pe_file}} retrieves all discordant paired-end
+The method for \code{\link{pe_file}} retrieves all discordant paired-end
 reads alignments overlapping a region from the PE matrix and returns a
 \code{pe_mat} object. Only the upstream read is checked for overlap.
 }

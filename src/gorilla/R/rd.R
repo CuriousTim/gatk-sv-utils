@@ -1,47 +1,102 @@
 #' @rdname svevidencefiles
 #' @export
-rd_file <- function(path, medians) {
-    new_rd_file(path, medians)
+rd_file <- function(path, medians, cachedir = NULL) {
+    new_rd_file(path, medians, cachedir)
 }
 
 #' @export
 print.rd_file <- function(x, ...) {
     cat("RD matrix file\n")
     cat("path: ", x$handle$path, "\n", sep = "")
-    cat("samples: ", length(x$header) - 3, "\n", sep = "")
 }
 
 #' @rdname query
 #' @export
 query.rd_file <- function(x, contig, start, end) {
-    coltypes <- c(
-        list(character(), integer(), integer()),
-        lapply(seq_len(length(x$header) - 3), double)
-    )
-    results <- tabix(x$handle, contig, start, end, coltypes)
-    names(results) <- x$header
+    results <- query(x$handle, contig, start, end)
 
-    mat <- do.call(
-        cbind,
-        results[!names(results) %in% c("chr", "start", "end")]
-    )
+    tmp <- data.table::fread(results, header = TRUE)
+    header <- colnames(tmp)
+    if (length(header) < 4 || !all(header[1:3] == c("#Chr", "Start", "End"))) {
+        stop("RD matrix has an invalid header")
+    }
+
+    check_rd_medians(header, x$medians)
+
+    ccols <- c("chr", "start", "end")
+    data.table::setnames(tmp, c("#Chr", "Start", "End"), ccols)
+    tmp[, names(.SD) := lapply(.SD, as.integer), .SDcols = c("start", "end")]
+    tmp[, names(.SD) := lapply(.SD, as.double), .SDcols = !ccols]
+
+    mat <- as.matrix(tmp[, .SD, .SDcols = !ccols])
 
     if (nrow(mat) > 0) {
         # RD matrix coordinates are 0-start
         ranges <- GenomicRanges::GRanges(
-            results$chr,
-            IRanges::IRanges(results$start + 1L, results$end)
+            tmp$chr,
+            IRanges::IRanges(tmp$start + 1L, tmp$end)
         )
         mat <- normalize_rd(mat, x$medians)
     } else {
         ranges <- GenomicRanges::GRanges()
     }
 
+    file.remove(results)
+
     structure(
         list(
             ranges = ranges,
             mat = mat,
             region = list(contig = contig, start = start, end = end)
+        ),
+        class = "rd_mat"
+    )
+}
+
+#' @export
+c.rd_mat <- function(...) {
+    dots <- list(...)
+
+    if (length(dots) == 0) {
+        return(NULL)
+    }
+
+    if (length(dots) < 1) {
+        return(dots[[1]])
+    }
+
+    first <- dots[[1]]
+    first_region <- first$region
+    first_ranges <- first$ranges
+    mats <- vector("list", length(dots))
+    mats[[1]] <- first$mat
+    for (i in seq(2, length(dots))) {
+        if (!inherits(dots[[i]], "rd_mat")) {
+            stop("all objects must be `rd_mat`")
+        }
+
+        if (!identical(dots[[i]]$region, first_region)) {
+            stop("only objects from the same region can be merged")
+        }
+
+        ranges <- dots[[i]]$ranges
+        if (!identical(ranges, first_ranges)) {
+            stop("only objects with the same ranges can be merged")
+        }
+
+        mats[[i]] <- dots[[i]]$mat
+    }
+
+    mat <- do.call(cbind, mats)
+    if (anyDuplicated(colnames(mat)) != 0) {
+        stop("column names of all matrices must be unique")
+    }
+
+    structure(
+        list(
+            ranges = first_ranges,
+            mat = mat,
+            region = first_region
         ),
         class = "rd_mat"
     )
@@ -113,37 +168,41 @@ smooth_rd <- function(x, n) {
     )
 }
 
-new_rd_file <- function(x, medians) {
+new_rd_file <- function(x, medians, cachedir) {
     stopifnot(is_string(x))
-    stopifnot(is.double(medians))
+    stopifnot(is_string(medians))
+    stopifnot(is.null(cachedir) || is_string(cachedir))
 
-    handle <- Rsamtools::TabixFile(x)
-    header <- read_rd_header(handle)
-    check_rd_medians(header, medians)
+    if (is.null(cachedir)) {
+        cachedir <- tempfile("rd", tempdir(TRUE))
+    }
+
+    tryCatch(
+        mkdir(cachedir),
+        error = function(e) {
+            stop("failed to create RD cache directory")
+        }
+    )
+
+    if (file.exists(medians)) {
+        medians_path <- medians
+    } else {
+        cached_medians <- file.path(cachedir, basename(medians))
+        if (!file.exists(cached_medians)) {
+            gcs_download_file(medians, cached_medians)
+        }
+        medians_path <- cached_medians
+    }
+
+    handle <- new_tabix_handle(x, cachedir)
 
     structure(
         list(
             handle = handle,
-            header = header,
-            medians = medians[header[-(1:3)]]
+            medians = read_median_coverages(medians_path)
         ),
         class = "rd_file"
     )
-}
-
-read_rd_header <- function(con) {
-    header <- Rsamtools::headerTabix(con)[["header"]]
-    if (is.null(header) || length(header) == 0) {
-        stop("RD matrix is missing a header")
-    }
-
-    header <- strsplit(header, split = "\t", fixed = TRUE)[[1]]
-    if (length(header) < 4 || !all(header[1:3] == c("#Chr", "Start", "End"))) {
-        stop("RD matrix has an invalid header")
-    }
-    header[1:3] <- c("chr", "start", "end")
-
-    header
 }
 
 check_rd_medians <- function(header, medians) {
@@ -155,5 +214,7 @@ check_rd_medians <- function(header, medians) {
 # Normalize the raw RD values by dividing by the median coverage
 # across the genome.
 normalize_rd <- function(x, medians) {
-    scale(x, FALSE, medians)
+    # the order of the samples in the medians vector may not match the order of
+    # the samples in the binned read-depth matrix
+    scale(x, FALSE, medians[colnames(x)])
 }

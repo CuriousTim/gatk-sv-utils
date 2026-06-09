@@ -27,6 +27,14 @@ is_integerish <- function(x) {
     TRUE
 }
 
+mkdir <- function(path) {
+    if (!dir.exists(path) && !dir.create(path, showWarnings = FALSE)) {
+        stop()
+    }
+
+    invisible(path)
+}
+
 # Add colored rectangles over the left and right sides of a plot where the
 # x-axis is genomic coordinates. The rectangles represent regions of the genome
 # flanking the region of interest.

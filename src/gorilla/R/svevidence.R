@@ -41,6 +41,9 @@
 #'
 #' @param path Path to the evidence file.
 #' @param medians Named numeric vector of median coverage values of samples.
+#' @param cachedir Path to a directory that can be used to store cached files.
+#'   It will be created if it does not exist. If `NULL`, the R session
+#'   temporary directory will be used.
 #' @returns An object for the evidence type.
 #'
 #' @examples
@@ -53,8 +56,8 @@
 #' cat("chr14\t11000\t+\tchr14\t15000\t+\tabc0000\n", file = tf_pe_src)
 #' cat("chr14\t11000\t+\tchr14\t16000\t+\tabc0001\n", file = tf_pe_src)
 #' close(src_conn)
-#' Rsamtools::bgzip(tf_pe_src, tf_pe_dest)
-#' Rsamtools::indexTabix(tf_pe_dest, seq = 1, start = 2, end = 2)
+#' system2("bgzip", args = c("-c", tf_pe_src), stdout = tf_pe_dest)
+#' system2("tabix", args = c("-b", 2, "-e", 2, "-s", 1, tf_pe_dest))
 #' pe <- pe_file(tf_pe_dest)
 #'
 #' # RD evidence
@@ -70,10 +73,9 @@
 #' cat("chr5\t1000200\t1000300\t30\t35\n", file = src_conn)
 #' close(src_conn)
 #'
-#' Rsamtools::bgzip(tf_rd_src, tf_rd_dest)
-#' Rsamtools::indexTabix(tf_rd_dest, seq = 1, start = 2, end = 3, comment = "#", zeroBased = TRUE)
-#' rd_medians <- read_median_coverages(tf_medians)
-#' rd <- rd_file(tf_rd_dest, rd_medians)
+#' system2("bgzip", args = c("-c", tf_rd_src), stdout = tf_rd_dest)
+#' system2("tabix", args = c("-b", 2, "-e", 3, "-s", 1, "-c", "'#'", "-0", tf_rd_dest))
+#' rd <- rd_file(tf_rd_dest, tf_medians)
 #'
 #' @name svevidencefiles
 NULL
@@ -122,11 +124,10 @@ NULL
 #'     package = "gorilla",
 #'     mustWork = TRUE
 #' )
-#' rd_medians <- read_median_coverages(medians_path)
 #'
 #' pe <- pe_file(pe_path)
 #' sr <- sr_file(sr_path)
-#' rd <- rd_file(rd_path, rd_medians)
+#' rd <- rd_file(rd_path, medians_path)
 #'
 #' sv <- svevidence("chr16", 28743149, 28745149, pe, sr, rd, "DUP")
 svevidence <- function(contig, start, end, pe, sr, rd, svtype, pad = 0) {
@@ -136,10 +137,6 @@ svevidence <- function(contig, start, end, pe, sr, rd, svtype, pad = 0) {
 #' @rdname subset_samples
 #' @export
 subset_samples.svevidence <- function(x, samples) {
-    sample_id <- NULL
-    rstart <- NULL
-    pos <- NULL
-
     pe <- subset_samples(x$pe, samples)
     sr <- subset_samples(x$sr, samples)
     rd <- subset_samples(x$rd, samples)
@@ -151,6 +148,52 @@ subset_samples.svevidence <- function(x, samples) {
             rd = rd,
             svtype = x$svtype,
             region = x$region
+        ),
+        class = "svevidence"
+    )
+}
+
+#' @export
+c.svevidence <- function(...) {
+    dots <- list(...)
+
+    if (length(dots) == 0) {
+        return(NULL)
+    }
+
+    if (length(dots) < 1) {
+        return(dots[[1]])
+    }
+
+    first_svtype <- dots[[1]]$svtype
+    first_region <- dots[[1]]$region
+    for (i in seq(2, length(dots))) {
+        if (!inherits(dots[[i]], "svevidence")) {
+            stop("all objects must be `svevidence`")
+        }
+
+        svtype <- dots[[i]]$svtype
+        if (dots[[i]]$svtype != first_svtype) {
+            stop("only evidence for the same SV type can be merged")
+        }
+
+        region <- dots[[i]]$region
+        if (!identical(dots[[i]]$region, first_region)) {
+            stop("only evidence from the same region can be merged")
+        }
+    }
+
+    pe <- lapply(dots, \(x) x$pe)
+    sr <- lapply(dots, \(x) x$sr)
+    rd <- lapply(dots, \(x) x$rd)
+
+    structure(
+        list(
+            pe = do.call(c, pe),
+            sr = do.call(c, sr),
+            rd = do.call(c, rd),
+            svtype = first_svtype,
+            region = first_region
         ),
         class = "svevidence"
     )

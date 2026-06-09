@@ -7,14 +7,18 @@
 \alias{svevidencefiles}
 \title{Structural variant evidence files}
 \usage{
-pe_file(path)
+pe_file(path, cachedir = NULL)
 
-rd_file(path, medians)
+rd_file(path, medians, cachedir = NULL)
 
-sr_file(path)
+sr_file(path, cachedir = NULL)
 }
 \arguments{
 \item{path}{Path to the evidence file.}
+
+\item{cachedir}{Path to a directory that can be used to store cached files.
+It will be created if it does not exist. If \code{NULL}, the R session
+temporary directory will be used.}
 
 \item{medians}{Named numeric vector of median coverage values of samples.}
 }
@@ -71,8 +75,8 @@ cat("chr14\t10000\t+\tchr14\t20000\t+\tabc0000\n", file = tf_pe_src)
 cat("chr14\t11000\t+\tchr14\t15000\t+\tabc0000\n", file = tf_pe_src)
 cat("chr14\t11000\t+\tchr14\t16000\t+\tabc0001\n", file = tf_pe_src)
 close(src_conn)
-Rsamtools::bgzip(tf_pe_src, tf_pe_dest)
-Rsamtools::indexTabix(tf_pe_dest, seq = 1, start = 2, end = 2)
+system2("bgzip", args = c("-c", tf_pe_src), stdout = tf_pe_dest)
+system2("tabix", args = c("-b", 2, "-e", 2, "-s", 1, tf_pe_dest))
 pe <- pe_file(tf_pe_dest)
 
 # RD evidence
@@ -88,9 +92,8 @@ cat("chr5\t1000100\t1000200\t39\t41\n", file = src_conn)
 cat("chr5\t1000200\t1000300\t30\t35\n", file = src_conn)
 close(src_conn)
 
-Rsamtools::bgzip(tf_rd_src, tf_rd_dest)
-Rsamtools::indexTabix(tf_rd_dest, seq = 1, start = 2, end = 3, comment = "#", zeroBased = TRUE)
-rd_medians <- read_median_coverages(tf_medians)
-rd <- rd_file(tf_rd_dest, rd_medians)
+system2("bgzip", args = c("-c", tf_rd_src), stdout = tf_rd_dest)
+system2("tabix", args = c("-b", 2, "-e", 3, "-s", 1, "-c", "'#'", "-0", tf_rd_dest))
+rd <- rd_file(tf_rd_dest, tf_medians)
 
 }

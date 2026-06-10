@@ -1,5 +1,7 @@
 get_gc_token <- function() {
-    if (!gc_token$validate()) {
+    # GceToken does not implement validate, but a token on GCE can still expire
+    # so we unconditionally refresh on GCE just to be safe
+    if (is(gc_token, "GceToken") || !gc_token$validate()) {
         gc_token$refresh()
     }
 

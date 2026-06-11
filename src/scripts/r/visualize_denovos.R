@@ -158,7 +158,7 @@ for (i in seq_len(nrow(variants))) {
     child_svevidence <- subset_samples(child_batch_svevidence, fam$sample_id)
 
     if (paternal_batch == child_batch) {
-        paternal_svevdience <- subset_samples(child_batch_svevidence, fam$paternal_id)
+        paternal_svevidence <- subset_samples(child_batch_svevidence, fam$paternal_id)
     } else {
         paternal_cachedir <- file.path(tmpdir, paternal_batch)
         paternal_pe <- pe_file(paternal_evidence_paths$pe_path, paternal_cachedir)

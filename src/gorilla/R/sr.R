@@ -9,25 +9,36 @@ sr_file <- function(path, cachedir = NULL) {
 query.sr_file <- function(x, contig, start, end) {
     results <- query(x$handle, contig, start, end)
 
-    tmp <- data.table::fread(
-        results,
-        header = FALSE,
-        colClasses = c(
-            "character",
-            "integer",
-            "character",
-            "integer",
-            "character"
-        ),
-        col.names = c(
-            "contig",
-            "pos",
-            "side",
-            "count",
-            "sample_id"
-        ),
-        key = c("sample_id", "pos")
-    )
+    if (file.size(results) == 0) {
+        tmp <- data.table::data.table(
+            contig = character(),
+            pos = integer(),
+            side = character(),
+            count = integer(),
+            sample_id = character(),
+            key = c("sample_id", "pos")
+        )
+    } else {
+        tmp <- data.table::fread(
+            results,
+            header = FALSE,
+            colClasses = c(
+                "character",
+                "integer",
+                "character",
+                "integer",
+                "character"
+            ),
+            col.names = c(
+                "contig",
+                "pos",
+                "side",
+                "count",
+                "sample_id"
+            ),
+            key = c("sample_id", "pos")
+        )
+    }
 
     file.remove(results)
 

@@ -9,29 +9,42 @@ pe_file <- function(path, cachedir = NULL) {
 query.pe_file <- function(x, contig, start, end) {
     results <- query(x$handle, contig, start, end)
 
-    tmp <- data.table::fread(
-        results,
-        header = FALSE,
-        colClasses = c(
-            "character",
-            "integer",
-            "character",
-            "character",
-            "integer",
-            "character",
-            "character"
-        ),
-        col.names = c(
-            "rcontig",
-            "rstart",
-            "rstrand",
-            "mcontig",
-            "mstart",
-            "mstrand",
-            "sample_id"
-        ),
-        key = c("sample_id", "rstart")
-    )
+    if (file.size(results) == 0) {
+        tmp <- data.table::data.table(
+            rcontig = character(),
+            rstart = integer(),
+            rstrand = character(),
+            mcontig = character(),
+            mstart = integer(),
+            mstrand = character(),
+            sample_id = character(),
+            key = c("sample_id", "rstart")
+        )
+    } else {
+        tmp <- data.table::fread(
+            results,
+            header = FALSE,
+            colClasses = c(
+                "character",
+                "integer",
+                "character",
+                "character",
+                "integer",
+                "character",
+                "character"
+            ),
+            col.names = c(
+                "rcontig",
+                "rstart",
+                "rstrand",
+                "mcontig",
+                "mstart",
+                "mstrand",
+                "sample_id"
+            ),
+            key = c("sample_id", "rstart")
+        )
+    }
 
     file.remove(results)
 

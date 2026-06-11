@@ -34,9 +34,16 @@ gcs_download_file <- function(src, dest) {
     res <- gargle::request_retry(
         req,
         httr::accept("application/octet-stream"),
-        httr::write_disk(dest)
+        httr::write_disk(dest, overwrite = TRUE)
     )
-    gargle::response_process(res)
+
+    # don't use gargle::response_process
+    # gargle enforces a JSON response, despite the underlying request
+    # explicitly accepting something
+    code <- httr::status_code(res)
+    if (code < 200 || code >= 300) {
+        stop(gargle::gargle_error_message(res))
+    }
 
     invisible(dest)
 }

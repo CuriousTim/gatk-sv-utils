@@ -11,6 +11,7 @@ workflow VisualizeDeNovoSVs {
     #    can be anything, but they must describe the variant chromosome, start, end, SV length,
     #    variant ID, SV type and sample ID, in that order.
     File variants
+    Int variants_per_batch = 25
 
     # TSV with sample ID, sample set ID
     File sample_table
@@ -38,8 +39,7 @@ workflow VisualizeDeNovoSVs {
   call BatchVariants {
     input:
       variants = variants,
-      sample_table = sample_table,
-      sample_set_id = sample_set_id,
+      variants_per_batch = variants_per_batch,
       base_docker = base_docker
   }
 
@@ -79,8 +79,7 @@ workflow VisualizeDeNovoSVs {
 task BatchVariants {
   input {
     File variants
-    File sample_table
-    Array[String] sample_set_id
+    Int variants_per_batch
     String base_docker
   }
 
@@ -88,7 +87,7 @@ task BatchVariants {
     Array[File] batched_variants = glob("batches/*.tsv")
   }
 
-  Float disk_size = size([variants, sample_table], "GB") * 2 + 16
+  Float disk_size = size(variants, "GB") * 2 + 16
 
   runtime {
     bootDiskSizeGb: 8
@@ -106,8 +105,7 @@ task BatchVariants {
     set -o pipefail
 
     variants='~{variants}'
-    sample_table='~{sample_table}'
-    sample_set_id='~{write_lines(sample_set_id)}'
+    variants_per_batch='~{variants_per_batch}'
 
     cat2() {
       local magic_num
@@ -120,15 +118,9 @@ task BatchVariants {
     }
 
     mkdir batches
-    gawk -F'\t' '
+    gawk -F'\t' -v n="${variants_per_batch}" '
       BEGIN { OFS = "\t" }
-      ARGIND == 1 {
-        path = sprintf("batches/%06d.tsv", FNR)
-        printf "" > path
-        outpaths[$1] = path
-      }
-      ARGIND == 2 { sample_map[$1] = $2 }
-      ARGIND == 3 && FNR == 1 {
+      FNR == 1 {
         for (i = 1; i <= NF; ++i) {
           if ($i == "sample") {
             sample_field = i
@@ -148,20 +140,18 @@ task BatchVariants {
         }
         next
       }
-      ARGIND == 3 && !($(sample_field) in sample_map) {
-        printf "%s does not have a sample set\n", $(sample_field) > "/dev/stderr"
-        exit 1
-      }
-      ARGIND == 3 {
-        sample_set = sample_map[$(sample_field)]
-        path = outpaths[sample_set]
-        if (!(path in written)) {
-          print header > path
-          written[path]
+      j % n == 0 {
+        if (outpath) {
+          close(outpath)
         }
-        print > path
+        outpath = sprintf("batches/%06d.tsv", k++)
+        print header > outpath
       }
-    ' "${sample_set_id}" "${sample_table}" <(cat2 "${variants}")
+      {
+        print > outpath
+        ++j
+      }
+    ' <(cat2 "${variants}")
   >>>
 }
 

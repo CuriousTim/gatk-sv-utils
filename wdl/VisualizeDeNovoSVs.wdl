@@ -28,7 +28,6 @@ workflow VisualizeDeNovoSVs {
     String output_tar_prefix
 
     String base_docker
-    String gatk_docker
     String r_docker
   }
 

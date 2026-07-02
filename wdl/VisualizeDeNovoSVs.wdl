@@ -59,7 +59,7 @@ workflow VisualizeDeNovoSVs {
         input:
           variants = BatchVariants.batched_variants[i],
           evidence_manifest = MakeEvidenceManifest.evidence_manifest,
-          sample_set_id = sample_set_id[i],
+          tar_prefix = "batch_${i}",
           sample_table = sample_table,
           pedigree = pedigree,
           r_docker = r_docker
@@ -200,13 +200,13 @@ task MakePlots {
     File variants
     File evidence_manifest
     File sample_table
-    String sample_set_id
+    String tar_prefix
     File pedigree
     String r_docker
   }
 
   output {
-    File plots_tar = "${sample_set_id}.tar"
+    File plots_tar = "${tar_prefix}.tar"
   }
 
   runtime {
@@ -227,15 +227,15 @@ task MakePlots {
     variants="~{variants}"
     evidence_manifest="~{evidence_manifest}"
     sample_table="~{sample_table}"
-    sample_set_id="~{sample_set_id}"
+    tar_prefix="~{tar_prefix}"
     pedigree="~{pedigree}"
 
     Rscript /opt/gatk-sv-utils/scripts/visualize_denovos.R \
       "${variants}" "${pedigree}" "${evidence_manifest}" "${sample_table}" \
-      "${sample_set_id}" 'exclusions.tsv'
+      "${tar_prefix}" 'exclusions.tsv'
 
-    mv exclusions.tsv "${sample_set_id}/exclusions.tsv"
-    tar -cf "${sample_set_id}.tar" "${sample_set_id}"
+    mv exclusions.tsv "${tar_prefix}/exclusions.tsv"
+    tar -cf "${tar_prefix}.tar" "${tar_prefix}"
   >>>
 }
 

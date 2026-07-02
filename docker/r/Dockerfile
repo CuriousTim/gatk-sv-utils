@@ -39,8 +39,8 @@ RUN --mount=type=bind,source=src/gorilla,target=/tmp/gorilla \
   cd /tmp \
   && R CMD build gorilla \
   && R CMD INSTALL --no-docs --no-html --no-help --without-keep.source \
-       gorilla_0.0.4.tar.gz \
-  && rm gorilla_0.0.4.tar.gz
+       gorilla_0.0.5.tar.gz \
+  && rm gorilla_0.0.5.tar.gz
 
 RUN R -e 'remove.packages("remotes")'
 

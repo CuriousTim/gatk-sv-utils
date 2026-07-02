@@ -4,7 +4,7 @@
 \alias{svevidence}
 \title{Create a new \code{svevidence} object}
 \usage{
-svevidence(contig, start, end, pe, sr, rd, svtype, pad = 0)
+svevidence(contig, start, end, pe, sr, rd, svtype, pad = 0, sr_pad = NULL)
 }
 \arguments{
 \item{contig}{A string. The contig containing the region.}
@@ -25,6 +25,11 @@ pairs evidence.}
 \item{pad}{Fraction of region to add as padding when extracting the evidence
 in the region. The minimum padded start is 1 and the maximum padded end
 is 536870912.}
+
+\item{sr_pad}{Number of bases to extend the breakpoints of the SV when
+querying for SR evidence. \code{NULL} will use the coordinates from applying
+\code{pad} and an integer value will override \code{pad} and extend the SV
+breakpoints by the given number of bases.}
 }
 \value{
 A \code{svevidence} object.

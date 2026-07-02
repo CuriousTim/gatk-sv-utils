@@ -96,6 +96,10 @@ NULL
 #' @param pad Fraction of region to add as padding when extracting the evidence
 #'   in the region. The minimum padded start is 1 and the maximum padded end
 #'   is 536870912.
+#' @param sr_pad Number of bases to extend the breakpoints of the SV when
+#'   querying for SR evidence. `NULL` will use the coordinates from applying
+#'   `pad` and an integer value will override `pad` and extend the SV
+#'   breakpoints by the given number of bases.
 #' @returns A `svevidence` object.
 #' @export
 #'
@@ -130,8 +134,8 @@ NULL
 #' rd <- rd_file(rd_path, medians_path)
 #'
 #' sv <- svevidence("chr16", 28743149, 28745149, pe, sr, rd, "DUP")
-svevidence <- function(contig, start, end, pe, sr, rd, svtype, pad = 0) {
-    new_svevidence(contig, start, end, pe, sr, rd, svtype, pad)
+svevidence <- function(contig, start, end, pe, sr, rd, svtype, pad = 0, sr_pad = NULL) {
+    new_svevidence(contig, start, end, pe, sr, rd, svtype, pad, sr_pad)
 }
 
 #' @rdname subset_samples
@@ -199,7 +203,7 @@ c.svevidence <- function(...) {
     )
 }
 
-new_svevidence <- function(contig, start, end, pe, sr, rd, svtype, pad) {
+new_svevidence <- function(contig, start, end, pe, sr, rd, svtype, pad, sr_pad) {
     stopifnot(is_string(contig))
     stopifnot(is_number(start))
     stopifnot(is_number(end))
@@ -208,13 +212,20 @@ new_svevidence <- function(contig, start, end, pe, sr, rd, svtype, pad) {
     stopifnot(inherits(rd, "rd_file"))
     stopifnot(is_string(svtype))
     stopifnot(is_number(pad) && pad >= 0)
+    stopifnot(is.null(sr_pad) || (is_integerish(sr_pad) && sr_pad >= 0))
 
     pad_size <- ceiling((end - start + 1) * pad)
     qstart <- max(1, start - pad_size)
     qend <- min(TABIX_MAX_SEQLEN, end + pad_size)
     pe_mat <- query(pe, contig, qstart, qend)
-    sr_mat <- query(sr, contig, qstart, qend)
     rd_mat <- query(rd, contig, qstart, qend)
+    if (!is.null(sr_pad)) {
+        srstart <- max(1, start - sr_pad)
+        srend <- min(TABIX_MAX_SEQLEN, end + sr_pad)
+        sr_mat <- query(sr, contig, srstart, srend)
+    } else {
+        sr_mat <- query(sr, contig, qstart, qend)
+    }
     region <- list(
         contig = contig,
         start = start,

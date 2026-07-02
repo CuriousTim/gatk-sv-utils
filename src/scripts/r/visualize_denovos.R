@@ -192,7 +192,8 @@ for (i in seq_len(nrow(variants))) {
         )
         maternal_batch_svevidence <- svevidence(
             v$chr, v$start, v$end, maternal_pe, maternal_sr, maternal_rd, v$svtype,
-            pad = if (v$svtype == "INS") 1000 else 0.3
+            pad = if (v$svtype == "INS") 1000 else 0.3,
+            sr_pad = if (v$svtype == "INS") 300 else NULL
         )
         maternal_svevidence <- subset_samples(maternal_batch_svevidence, fam$maternal_id)
     }

@@ -80,7 +80,13 @@ new_denovo_plotter <- function(x) {
     stopifnot(inherits(x, "svtrio"))
 
     pe <- new_pe_plotter(x$evidence$pe)
-    sr <- new_sr_plotter(x$evidence$sr)
+
+    # a hack to make SR plot over same interval as the other evidence tracks
+    # when the padding is different
+    synced_sr <- x$evidence$sr
+    synced_sr$region <- x$evidence$pe$region
+    sr <- new_sr_plotter(synced_sr)
+
     rd <- new_rd_plotter(
         x$evidence$rd,
         median_region = x$evidence$region

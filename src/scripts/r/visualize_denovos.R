@@ -152,7 +152,8 @@ for (i in seq_len(nrow(variants))) {
     # visualize anything so we add 1Kb padding.
     child_batch_svevidence <- svevidence(
         v$chr, v$start, v$end, child_pe, child_sr, child_rd, v$svtype,
-        pad = if (v$svtype == "INS") 1000 else 0.3
+        pad = if (v$svtype == "INS") 1000 else 0.3,
+        sr_pad = if (v$svtype == "INS") 300 else NULL
     )
 
     child_svevidence <- subset_samples(child_batch_svevidence, fam$sample_id)
@@ -170,7 +171,8 @@ for (i in seq_len(nrow(variants))) {
         )
         paternal_batch_svevidence <- svevidence(
             v$chr, v$start, v$end, paternal_pe, paternal_sr, paternal_rd, v$svtype,
-            pad = if (v$svtype == "INS") 1000 else 0.3
+            pad = if (v$svtype == "INS") 1000 else 0.3,
+            sr_pad = if (v$svtype == "INS") 300 else NULL
         )
         paternal_svevidence <- subset_samples(paternal_batch_svevidence, fam$paternal_id)
     }

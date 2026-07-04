@@ -25,7 +25,6 @@ workflow VisualizeDeNovoSVs {
     Array[File] median_cov
     Array[String] sample_set_id
 
-    File sequence_dict
     String output_tar_prefix
 
     String base_docker

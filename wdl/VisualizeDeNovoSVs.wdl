@@ -61,7 +61,8 @@ workflow VisualizeDeNovoSVs {
           tar_prefix = "batch_${i}",
           sample_table = sample_table,
           pedigree = pedigree,
-          r_docker = r_docker
+          r_docker = r_docker,
+          max_svlen_file = BatchVariants.max_svlens[i]
       }
     }
   }
@@ -84,6 +85,7 @@ task BatchVariants {
 
   output {
     Array[File] batched_variants = glob("batches/*.tsv")
+    Array[File] max_svlens = glob("mems/*")
   }
 
   Float disk_size = size(variants, "GB") * 2 + 16
@@ -117,6 +119,7 @@ task BatchVariants {
     }
 
     mkdir batches
+    mkdir mems
     gawk -F'\t' -v n="${variants_per_batch}" '
       BEGIN { OFS = "\t" }
       FNR == 1 {
@@ -124,30 +127,41 @@ task BatchVariants {
           if ($i == "sample") {
             sample_field = i
           }
+
+          if ($i == "svlen") {
+            svlen_field = i
+          }
         }
-        if (!sample_field) {
+        if (!sample_field || !svlen_field) {
           if (NF != 7) {
-            print "variants file does not have a \"sample\" column" > "/dev/stderr"
+            print "variants file does not have \"sample\" and \"svlen\" columns" > "/dev/stderr"
             exit 1
           } else {
             header = "chr\tstart\tend\tsvlen\tvid\tsvtype\tsample_id"
+            svlen_field = 4
             sample_field = 7
           }
         } else {
           $sample_field = "sample_id"
           header = $0
         }
+
         next
       }
       j % n == 0 {
         if (outpath) {
           close(outpath)
+          mem_outpath = sprintf("mems/%06d", k - 1)
+          print max_svlen > mem_outpath
+          close(mem_outpath)
+          max_svlen = 0
         }
         outpath = sprintf("batches/%06d.tsv", k++)
         print header > outpath
       }
       {
         print > outpath
+        max_svlen = max_svlen >= $svlen_field ? max_svlen : $svlen_field
         ++j
       }
     ' <(cat2 "${variants}")
@@ -202,20 +216,31 @@ task MakePlots {
     String tar_prefix
     File pedigree
     String r_docker
+    File max_svlen_file
+
+    Float? mem_gib
+    Int? disk_gb
+    Int? cpu
+    Int? boot_disk_gb
+    Int? preemptible_tries
+    Int? max_retries
   }
 
   output {
     File plots_tar = "${tar_prefix}.tar"
   }
 
+  Int max_svlen = read_int(max_svlen_file)
+  Float default_mem_gib = if max_svlen < 10000000 then 16 else 32
+
   runtime {
-    bootDiskSizeGb: 8
-    cpu: 2
-    disks: "local-disk 64 HDD"
+    bootDiskSizeGb: select_first([boot_disk_gb, 8])
+    cpu: select_first([cpu, 2])
+    disks: "local-disk " + select_first([disk_gb, 128]) + " HDD"
     docker: r_docker
-    maxRetries: 1
-    memory: "16 GiB"
-    preemptible: 3
+    maxRetries: select_first([max_retries, 1])
+    memory: select_first([mem_gib, default_mem_gib]) + " GiB"
+    preemptible: select_first([preemptible_tries, 3])
   }
 
   command <<<

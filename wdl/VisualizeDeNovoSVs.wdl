@@ -164,6 +164,13 @@ task BatchVariants {
         max_svlen = max_svlen >= $svlen_field ? max_svlen : $svlen_field
         ++j
       }
+      END {
+        if (k > 0) {
+          mem_outpath = sprintf("mems/%06d", k - 1)
+          print max_svlen > mem_outpath
+          close(mem_outpath)
+        }
+      }
     ' <(cat2 "${variants}")
   >>>
 }

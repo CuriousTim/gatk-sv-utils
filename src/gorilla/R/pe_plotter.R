@@ -1,4 +1,4 @@
-PE_LANES_PER_SAMPLE <- 16
+MIN_PE_LANES_PER_SAMPLE <- 16
 
 #' Create a new `pe_plotter` object
 #'
@@ -51,7 +51,8 @@ plot.pe_plotter <- function(x, y, samples, main = "", col = "#000000", ...) {
             (length(col) == 1 || length(col) == length(samples))
     )
 
-    lanes <- length(samples) * PE_LANES_PER_SAMPLE
+    lanes <- length(samples) * x$lanes_per_sample
+
     plot(
         NULL,
         xlim = c(x$region$start, x$region$end),
@@ -73,8 +74,9 @@ plot.pe_plotter <- function(x, y, samples, main = "", col = "#000000", ...) {
         if (nrow(target) > 0) {
             draw_sample_pe(
                 target,
-                lanes - (PE_LANES_PER_SAMPLE * (i - 1)),
-                col[[i]]
+                lanes - (x$lanes_per_sample * (i - 1)),
+                col[[i]],
+                x$lanes_per_sample
             )
         }
     }
@@ -91,16 +93,29 @@ new_pe_plotter <- function(x) {
         rcontig == mcontig & rstart >= x$region$start & mstart <= x$region$end,
     ]
     set_pe_arrow_widths(mat, x$region)
+    lanes_per_sample <- mat[, num_pe_lanes(pe_start, pe_end), by = "sample_id"]
+    if (nrow(lanes_per_sample) == 0) {
+        lanes_per_sample <- 0
+    } else {
+        lanes_per_sample <- max(lanes_per_sample$V1)
+    }
 
-    structure(list(mat = mat, region = x$region), class = "pe_plotter")
+    structure(
+        list(
+            mat = mat,
+            lanes_per_sample = max(lanes_per_sample, MIN_PE_LANES_PER_SAMPLE),
+            region = x$region
+    ),
+        class = "pe_plotter"
+    )
 }
 
 
-draw_sample_pe <- function(x, y, color) {
+draw_sample_pe <- function(x, y, color, max_lanes) {
     rcontig <- NULL
     mcontig <- NULL
     same_contig <- x[rcontig == mcontig, ]
-    ends <- integer(PE_LANES_PER_SAMPLE)
+    ends <- integer(max_lanes)
     # assumes pairs is sorted by rstart
     for (i in seq_len(nrow(same_contig))) {
         pair <- same_contig[i, ]
@@ -168,4 +183,28 @@ draw_pe_pair <- function(pair, y, col) {
         col = col
     )
     graphics::segments(pair$pe_start, y, pair$pe_end, y, lty = 3, col = col)
+}
+
+# compute number of lanes needed to plot all PE pairs for a sample
+num_pe_lanes <- function(pe_starts, pe_ends) {
+    lanes <- 0
+    if (length(pe_starts) == 0) {
+        return(lanes)
+    }
+
+    starts <- sort(pe_starts)
+    ends <- sort(pe_ends)
+
+    i <- 1
+    j <- 1
+    while (i <= length(starts)) {
+        if (starts[[i]] < ends[[j]]) {
+            i <- i + 1
+            lanes <- lanes + 1
+        } else {
+            j <- j + 1
+        }
+    }
+
+    lanes
 }

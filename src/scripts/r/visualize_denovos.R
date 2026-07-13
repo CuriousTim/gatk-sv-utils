@@ -208,7 +208,9 @@ for (i in seq_len(nrow(variants))) {
         argv[[5]],
         sprintf("%s~~%s~~%s_%d-%d.png", v$vid, v$sample_id, v$chr, v$start, v$end)
     )
-    png(plot_path, width = 3840, height = 2160, res = 300)
+    # numbers based on the relative track heights in denovo_plotter
+    height_scale <- (1.2 * plotter$pe_track_scale + 1.8) / 3
+    png(plot_path, width = 3840, height = 2160 * height_scale, res = 300)
     plot_call <- call("plot", x = quote(plotter))
     if ("o_ev" %in% colnames(v)) {
         plot_call[["evtype"]] <- v$o_ev

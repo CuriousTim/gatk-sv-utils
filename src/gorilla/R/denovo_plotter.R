@@ -53,7 +53,10 @@ denovo_plotter <- function(x) {
 plot.denovo_plotter <- function(x, y, ...) {
     old_par <- graphics::par(no.readonly = TRUE)
     on.exit(graphics::par(old_par), add = TRUE)
-    graphics::layout(matrix(1:5, nrow = 5), heights = c(1.2, 0.3, 0.4, 0.1, 1))
+    graphics::layout(
+        matrix(1:5, nrow = 5),
+        heights = c(1.2 * x$pe_track_scale, 0.3, 0.4, 0.1, 1)
+    )
     main <- make_denovo_main_string(x, ...)
 
     trio <- unlist(x$trio)
@@ -113,7 +116,9 @@ new_denovo_plotter <- function(x) {
             repeats = repeats,
             svtype = x$evidence$svtype,
             region = x$evidence$region,
-            trio = x$trio
+            trio = x$trio,
+            # must be >= 1
+            pe_track_scale = pe$lanes_per_sample / MIN_PE_LANES_PER_SAMPLE
         ),
         class = "denovo_plotter"
     )

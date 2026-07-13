@@ -79,6 +79,7 @@ plot.repeats_plotter <- function(x, y, ...) {
         rep(x$region$end - (x$region$end - x$region$start + 1) * 0.001, 3),
         c(2.5, 5.5, 8.5),
         labels = c("SD", "RM", "SR"),
-        adj = c(1, 0.5)
+        adj = c(1, 0.5),
+        cex = 0.7,
     )
 }

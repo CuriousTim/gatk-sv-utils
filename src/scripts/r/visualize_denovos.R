@@ -182,8 +182,6 @@ for (i in seq_len(nrow(variants))) {
     } else if (maternal_batch == paternal_batch) {
         maternal_svevidence <- subset_samples(paternal_batch_svevidence, fam$maternal_id)
     } else {
-        # to save memory
-        rm(child_batch_svevidence, paternal_batch_svevidence)
         maternal_cachedir <- file.path(tmpdir, maternal_batch)
         maternal_pe <- pe_file(maternal_evidence_paths$pe_path, maternal_cachedir)
         maternal_sr <- sr_file(maternal_evidence_paths$sr_path, maternal_cachedir)

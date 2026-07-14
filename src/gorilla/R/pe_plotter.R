@@ -197,9 +197,8 @@ num_pe_lanes <- function(pe_starts, pe_ends) {
 
     i <- 1
     j <- 1
-    while (i <= length(starts)) {
+    for (i in seq_along(starts)) {
         if (starts[[i]] < ends[[j]]) {
-            i <- i + 1
             lanes <- lanes + 1
         } else {
             j <- j + 1

@@ -107,9 +107,11 @@ new_denovo_plotter <- function(x) {
         x$evidence$region$qend
     )
 
-    pe_lanes <- max(
-        sum(pe$lanes_per_sample$lanes), 3 * MIN_PE_LANES_PER_SAMPLE
-    )
+    if (any(pe$lanes_per_sample$lanes > MIN_PE_LANES_PER_SAMPLE)) {
+        pe_lanes <- 3 * MAX_PE_LANES_PER_SAMPLE
+    } else {
+        pe_lanes <- 3 * MIN_PE_LANES_PER_SAMPLE
+    }
 
     structure(
         list(

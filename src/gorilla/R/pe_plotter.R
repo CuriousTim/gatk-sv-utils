@@ -1,4 +1,5 @@
 MIN_PE_LANES_PER_SAMPLE <- 16
+MAX_PE_LANES_PER_SAMPLE <- 60
 
 #' Create a new `pe_plotter` object
 #'
@@ -51,18 +52,22 @@ plot.pe_plotter <- function(x, y, samples, main = "", col = "#000000", ...) {
             (length(col) == 1 || length(col) == length(samples))
     )
 
-    lanes <- max(
-        sum(x$lanes_per_sample$lanes),
-        length(samples) * MIN_PE_LANES_PER_SAMPLE
-    )
+    if (any(x$lanes_per_sample$lanes > MIN_PE_LANES_PER_SAMPLE)) {
+        lanes <- length(samples) * MAX_PE_LANES_PER_SAMPLE
+        max_pe_per_sample <- MAX_PE_LANES_PER_SAMPLE
+    } else {
+        lanes <- length(samples) * MIN_PE_LANES_PER_SAMPLE
+        max_pe_per_sample <- MIN_PE_LANES_PER_SAMPLE
+    }
 
     plot(
         NULL,
         xlim = c(x$region$start, x$region$end),
-        ylim = c(1, lanes),
+        ylim = c(0, lanes + 1),
         ylab = "PE Evidence",
         xlab = "",
         xaxs = "i",
+        yaxs = "i",
         xaxt = "n",
         yaxt = "n",
         main = main
@@ -76,9 +81,14 @@ plot.pe_plotter <- function(x, y, samples, main = "", col = "#000000", ...) {
         rstart <- NULL
         data.table::setkey(target, rcontig, rstart)
         if (nrow(target) > 0) {
-            max_lanes <- x$lanes_per_sample[samples[[i]], lanes, nomatch = NULL]
-            draw_sample_pe(target, ystart, col[[i]], max_lanes)
-            ystart <- ystart - max_lanes
+            any_dropped <- draw_sample_pe(target, ystart, col[[i]], max_pe_per_sample)
+            ystart <- ystart - max_pe_per_sample
+            if (any_dropped) {
+                draw_dropped_pe_mark(
+                    x$region$end - (x$region$end - x$region$start + 1) * 0.02,
+                    ystart + max_pe_per_sample * 0.04
+                )
+            }
         }
     }
 }
@@ -98,12 +108,7 @@ new_pe_plotter <- function(x) {
     if (nrow(mat) > 0) {
         set_pe_arrow_widths(mat, x$region)
         lanes_per_sample <- mat[,
-            list(
-                lanes = max(
-                    num_pe_lanes(pe_start, pe_end),
-                    MIN_PE_LANES_PER_SAMPLE
-                )
-            ),
+            list(lanes = num_pe_lanes(pe_start, pe_end)),
             by = "sample_id"
         ]
     } else {
@@ -130,6 +135,7 @@ draw_sample_pe <- function(x, y, color, max_lanes) {
     mcontig <- NULL
     same_contig <- x[rcontig == mcontig, ]
     ends <- integer(max_lanes)
+    any_dropped <- FALSE
     # assumes pairs is sorted by rstart
     for (i in seq_len(nrow(same_contig))) {
         pair <- same_contig[i, ]
@@ -144,12 +150,15 @@ draw_sample_pe <- function(x, y, color, max_lanes) {
         # skip drawing read pairs that would overlap an existing one
         # could be terrible
         if (j == 0) {
+            any_dropped <- TRUE
             next
         }
 
         ends[[j]] <- pair$pe_end
         draw_pe_pair(pair, y - (j - 1), color)
     }
+
+    any_dropped
 }
 
 set_pe_arrow_widths <- function(x, region) {
@@ -197,6 +206,10 @@ draw_pe_pair <- function(pair, y, col) {
         col = col
     )
     graphics::segments(pair$pe_start, y, pair$pe_end, y, lty = 3, col = col)
+}
+
+draw_dropped_pe_mark <- function(x, y) {
+    graphics::points(x, y, pch = 13, col = "red", cex = 3)
 }
 
 # compute number of lanes needed to plot all PE pairs for a sample

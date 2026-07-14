@@ -107,6 +107,10 @@ new_denovo_plotter <- function(x) {
         x$evidence$region$qend
     )
 
+    pe_lanes <- max(
+        sum(pe$lanes_per_sample$lanes), 3 * MIN_PE_LANES_PER_SAMPLE
+    )
+
     structure(
         list(
             pe = pe,
@@ -118,7 +122,7 @@ new_denovo_plotter <- function(x) {
             region = x$evidence$region,
             trio = x$trio,
             # must be >= 1
-            pe_track_scale = pe$lanes_per_sample / MIN_PE_LANES_PER_SAMPLE
+            pe_track_scale = pe_lanes / (3 * MIN_PE_LANES_PER_SAMPLE)
         ),
         class = "denovo_plotter"
     )

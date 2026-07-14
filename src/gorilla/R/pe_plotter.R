@@ -51,7 +51,10 @@ plot.pe_plotter <- function(x, y, samples, main = "", col = "#000000", ...) {
             (length(col) == 1 || length(col) == length(samples))
     )
 
-    lanes <- length(samples) * x$lanes_per_sample
+    lanes <- max(
+        sum(x$lanes_per_sample$lanes),
+        length(samples) * MIN_PE_LANES_PER_SAMPLE
+    )
 
     plot(
         NULL,
@@ -66,18 +69,16 @@ plot.pe_plotter <- function(x, y, samples, main = "", col = "#000000", ...) {
     )
 
     col <- if (length(col) == 1) rep(col, length(sample)) else col
+    ystart <- lanes
     for (i in seq_along(samples)) {
         target <- x$mat[samples[[i]], nomatch = NULL]
         rcontig <- NULL
         rstart <- NULL
         data.table::setkey(target, rcontig, rstart)
         if (nrow(target) > 0) {
-            draw_sample_pe(
-                target,
-                lanes - (x$lanes_per_sample * (i - 1)),
-                col[[i]],
-                x$lanes_per_sample
-            )
+            max_lanes <- x$lanes_per_sample[samples[[i]], lanes, nomatch = NULL]
+            draw_sample_pe(target, ystart, col[[i]], max_lanes)
+            ystart <- ystart - max_lanes
         }
     }
 }
@@ -89,23 +90,36 @@ new_pe_plotter <- function(x) {
     mcontig <- NULL
     rstart <- NULL
     mstart <- NULL
+    sample_id <- NULL
+
     mat <- x$mat[
         rcontig == mcontig & rstart >= x$region$start & mstart <= x$region$end,
     ]
-    set_pe_arrow_widths(mat, x$region)
-    lanes_per_sample <- mat[, num_pe_lanes(pe_start, pe_end), by = "sample_id"]
-    if (nrow(lanes_per_sample) == 0) {
-        lanes_per_sample <- 0
+    if (nrow(mat) > 0) {
+        set_pe_arrow_widths(mat, x$region)
+        lanes_per_sample <- mat[,
+            list(
+                lanes = max(
+                    num_pe_lanes(pe_start, pe_end),
+                    MIN_PE_LANES_PER_SAMPLE
+                )
+            ),
+            by = "sample_id"
+        ]
     } else {
-        lanes_per_sample <- max(lanes_per_sample$V1)
+        lanes_per_sample <- data.table(
+            lanes = double(),
+            sample_id = character()
+        )
     }
+    setkey(lanes_per_sample, sample_id)
 
     structure(
         list(
             mat = mat,
-            lanes_per_sample = max(lanes_per_sample, MIN_PE_LANES_PER_SAMPLE),
+            lanes_per_sample = lanes_per_sample,
             region = x$region
-    ),
+        ),
         class = "pe_plotter"
     )
 }

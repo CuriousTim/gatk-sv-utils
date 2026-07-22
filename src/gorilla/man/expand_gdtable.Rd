@@ -2,23 +2,37 @@
 % Please edit documentation in R/gdtable.R
 \name{expand_gdtable}
 \alias{expand_gdtable}
-\title{Expand genomic disorder regions.}
+\title{Expand genomic disorder regions}
 \usage{
 expand_gdtable(x, prop)
 }
 \arguments{
-\item{x}{A \code{data.table} produced by \code{\link[=read_gdtable]{read_gdtable}}.}
+\item{x}{A \code{data.table} produced by \code{\link[=read_gdtable]{read_gdtable()}}.}
 
 \item{prop}{The fraction of each region by which to expand it.}
 }
 \value{
 A \code{data.table} with columns \code{qstart} and \code{qend} with the expanded
-start and end.
+start and end, invisibly.
 }
 \description{
-Expand each genomic disorder region by some fraction of its size.
+Expand the regions in a \code{data.table} of genomic disorder regions.
 }
 \details{
 The start of the expanded region will not be less than 1 and the end of the
-region will not be greater than 5536870912.
+region will not be greater than 5536870912. The object is modified in place.
+}
+\examples{
+tmp <- tempfile()
+fp <- file(tmp, open = "wt")
+writeLines(
+    "chr\tstart_GRCh38\tend_GRCh38\tGD_ID\tsvtype\tNAHR\tterminal\tcluster",
+    fp
+)
+writeLines("chr1\t898703\t6229913\tGD_0000\tDUP\tno\tp\t", fp)
+writeLines("chr15\t31727418\t32153204\tGD_0001\tDEL\tyes\tno\tcluster00", fp)
+close(fp)
+
+gds <- read_gdtable(tmp)
+expanded_gds <- expand_gdtable(gds, 0.2)
 }

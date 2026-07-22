@@ -2,7 +2,7 @@
 % Please edit documentation in R/gdtable.R
 \name{read_gdtable}
 \alias{read_gdtable}
-\title{Read genomic disorders table file.}
+\title{Read a genomic disorders table file}
 \usage{
 read_gdtable(path)
 }
@@ -10,10 +10,10 @@ read_gdtable(path)
 \item{path}{Path to the file.}
 }
 \value{
-A \code{data.table}.
+A \code{\link[data.table:data.table]{data.table}}.
 }
 \description{
-Reads a TSV file describing genomic disorder regions.
+Read a TSV file describing genomic disorder regions.
 }
 \details{
 The file must have the following columns:
@@ -29,4 +29,16 @@ non-terminal region
 \item cluster: either a cluster ID or an empty string
 The file must have column headers as given.
 }
+}
+\examples{
+tmp <- tempfile()
+fp <- file(tmp, open = "wt")
+writeLines(
+    "chr\tstart_GRCh38\tend_GRCh38\tGD_ID\tsvtype\tNAHR\tterminal\tcluster",
+    fp
+)
+writeLines("chr1\t898703\t6229913\tGD_0000\tDUP\tno\tp\t", fp)
+writeLines("chr15\t31727418\t32153204\tGD_0001\tDEL\tyes\tno\tcluster00", fp)
+close(fp)
+gds <- read_gdtable(tmp)
 }

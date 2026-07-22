@@ -1,5 +1,5 @@
 # Read a sex ploidy file which is just the second and fifth columns of a PED
-# file.
+# file (sample ID, sex).
 read_sex_ploidy <- function(path) {
     sex <- NULL
     sample_id <- NULL

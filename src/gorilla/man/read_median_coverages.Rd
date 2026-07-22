@@ -2,7 +2,7 @@
 % Please edit documentation in R/median_coverages.R
 \name{read_median_coverages}
 \alias{read_median_coverages}
-\title{Read the median coverages file.}
+\title{Median sequencing coverage file}
 \usage{
 read_median_coverages(path)
 }
@@ -14,5 +14,19 @@ A named vector in which the names are the sample IDs and the values
 are the median coverages.
 }
 \description{
-Read the median coverages file.
+Read a file with genome-wide median sequencing coverage for samples.
+}
+\details{
+The file should contain two lines. The first line must be tab-separated
+sample IDs and the second line must be tab-separated genome-wide median
+sequencing coverage for each sample.
+}
+\examples{
+medians_path <- system.file(
+    "extdata",
+    "example_medianCov.txt",
+    package = "gorilla",
+    mustWork = TRUE
+)
+rd_medians <- read_median_coverages(medians_path)
 }

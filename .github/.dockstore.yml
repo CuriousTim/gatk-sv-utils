@@ -177,3 +177,11 @@ workflows:
         - main
       tags:
         - /.*/
+  - name: CheckDeNovoEvidence
+    subclass: WDL
+    primaryDescriptorPath: /wdl/CheckDeNovoEvidence.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/

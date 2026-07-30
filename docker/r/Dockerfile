@@ -36,13 +36,6 @@ RUN R -e 'withCallingHandlers(install.packages("remotes"), warning = function(w)
 RUN --mount=type=bind,source=docker/r/install.R,target=/tmp/install.R \
   Rscript /tmp/install.R
 
-RUN --mount=type=bind,source=src/gorilla,target=/tmp/gorilla \
-  cd /tmp \
-  && R CMD build gorilla \
-  && R CMD INSTALL --no-docs --no-html --no-help --without-keep.source \
-       gorilla_0.0.9.tar.gz \
-  && rm gorilla_0.0.9.tar.gz
-
 RUN R -e 'remotes::install_github("talkowski-lab/gorilla", build_opts = c("--without-keep.source", "--no-help"))'
 
 RUN R -e 'remove.packages("remotes")'

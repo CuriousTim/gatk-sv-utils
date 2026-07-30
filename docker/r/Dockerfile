@@ -43,6 +43,8 @@ RUN --mount=type=bind,source=src/gorilla,target=/tmp/gorilla \
        gorilla_0.0.9.tar.gz \
   && rm gorilla_0.0.9.tar.gz
 
+RUN R -e 'remotes::install_github("talkowski-lab/gorilla", build_opts = c("--without-keep.source", "--no-help"))'
+
 RUN R -e 'remove.packages("remotes")'
 
 RUN mkdir -p /opt/gatk-sv-utils/scripts

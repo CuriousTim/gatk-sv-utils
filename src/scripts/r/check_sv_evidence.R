@@ -18,6 +18,10 @@
 # <outpath>
 # Path to the output
 
+nzchar2 <- function(x) {
+    !is.na(x) && nzchar(x)
+}
+
 argv <- commandArgs(trailingOnly = TRUE)
 
 suppressPackageStartupMessages(library(gorilla))

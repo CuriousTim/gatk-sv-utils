@@ -69,14 +69,14 @@ for (i in seq_len(nrow(variants))) {
 
     if (nrow(fam) == 0) {
         message(
-            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "sample missing from pedigree"),
+            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "sample missing from pedigree")
         )
         next
     }
 
     if (!nzchar2(fam$paternal_id) || !nzchar2(fam$maternal_id)) {
         message(
-            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "parents missing from pedigree"),
+            sprintf("%s\t%s\t%s", v$sample_id, v$vid, "parents missing from pedigree")
         )
         next
     }

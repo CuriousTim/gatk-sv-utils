@@ -66,7 +66,7 @@ workflow CheckDeNovoEvidence {
 
   call MergeCheckedVariants {
     input:
-      variants = BatchVariants.batched_variants,
+      variants = select_all(CheckVariants.checked_variants),
       output_prefix = output_prefix,
       base_docker = base_docker
   }

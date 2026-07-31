@@ -120,6 +120,7 @@ task BatchVariants {
     gawk -F'\t' -v n="${variants_per_batch}" '
       BEGIN { OFS = "\t" }
       FNR == 1 {
+        header = $0
         for (i = 1; i <= NF; ++i) {
           if ($i == "svlen") {
             svlen_field = i

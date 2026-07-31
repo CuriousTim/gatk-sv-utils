@@ -260,7 +260,7 @@ task MergeCheckedVariants {
   }
 
   output {
-    File merged_checked_variants = "${output_prefix}.tar.gz"
+    File merged_checked_variants = "${output_prefix}.tsv.gz"
   }
 
   Float disk_size = size(variants, "GB") * 2 + 32

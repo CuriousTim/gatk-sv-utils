@@ -18,6 +18,8 @@
 # <outpath>
 # Path to the output
 
+options(warn = 1)
+
 nzchar2 <- function(x) {
     !is.na(x) && nzchar(x)
 }
@@ -111,9 +113,13 @@ for (i in seq_len(nrow(variants))) {
         child_cachedir
     )
 
+    # we want at least 1K bases of padding to make sure we capture all the PE
+    # near the SV breakpoints
+    pad <- max(1000 / (v$end - v$start + 1), 0.1)
+
     child_batch_svevidence <- svevidence(
         v$chr, v$start, v$end, child_pe, child_sr, child_rd, v$svtype,
-        pad = 0.1, sr_pad = if (v$svtype == "INS") 300 else NULL
+        pad = pad, sr_pad = if (v$svtype == "INS") 300 else NULL
     )
 
     child_svevidence <- subset_samples(child_batch_svevidence, fam$sample_id)
@@ -131,7 +137,7 @@ for (i in seq_len(nrow(variants))) {
         )
         paternal_batch_svevidence <- svevidence(
             v$chr, v$start, v$end, paternal_pe, paternal_sr, paternal_rd, v$svtype,
-            pad = 0.1, sr_pad = if (v$svtype == "INS") 300 else NULL
+            pad = pad, sr_pad = if (v$svtype == "INS") 300 else NULL
         )
         paternal_svevidence <- subset_samples(paternal_batch_svevidence, fam$paternal_id)
     }
@@ -151,7 +157,7 @@ for (i in seq_len(nrow(variants))) {
         )
         maternal_batch_svevidence <- svevidence(
             v$chr, v$start, v$end, maternal_pe, maternal_sr, maternal_rd, v$svtype,
-            pad = 0.1, sr_pad = if (v$svtype == "INS") 300 else NULL
+            pad = pad, sr_pad = if (v$svtype == "INS") 300 else NULL
         )
         maternal_svevidence <- subset_samples(maternal_batch_svevidence, fam$maternal_id)
     }

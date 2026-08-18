@@ -105,15 +105,10 @@ task BatchVariants {
     variants='~{variants}'
     variants_per_batch='~{variants_per_batch}'
 
-    cat2() {
-      local magic_num
-      magic_num="$(od -N 2 -t x1 "$1" | awk 'NF>1{$1=""; gsub(/ /, ""); print}')"
-      if [[ "${magic_num}" = '1f8b' ]]; then
-        gzip -cd "$1"
-      else
-        cat "$1"
-      fi
-    }
+    mv "${variants}" variants.tsv.gz
+    # sort by SV length so that SVs of similar size will end up in the same VM
+    duckdb ':memory:' \
+      "COPY (SELECT * FROM read_csv('variants.tsv.gz', delim = '\t') ORDER BY svlen) TO 'temp.tsv' (FORMAT CSV, DELIM '\t');"
 
     mkdir batches
     mkdir mems
@@ -155,7 +150,7 @@ task BatchVariants {
           close(mem_outpath)
         }
       }
-    ' <(cat2 "${variants}")
+    ' temp.tsv
   >>>
 }
 
@@ -223,8 +218,8 @@ task CheckVariants {
   }
 
   Int max_svlen = read_int(max_svlen_file)
-  Int default_cpus = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 8 else 4 else 2
-  Float default_mem_gib = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 64 else 32 else 16
+  Int default_cpus = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 16 else 4 else 2
+  Float default_mem_gib = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 128 else 32 else 16
 
   runtime {
     bootDiskSizeGb: select_first([boot_disk_gb, 8])

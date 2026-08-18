@@ -212,7 +212,7 @@ task CheckVariants {
 
     Float? mem_gib
     Int? disk_gb
-    Int? cpu
+    Int? cpus
     Int? boot_disk_gb
     Int? preemptible_tries
     Int? max_retries
@@ -223,12 +223,12 @@ task CheckVariants {
   }
 
   Int max_svlen = read_int(max_svlen_file)
-  Int default_cpus = if max_svlen < 10000000 then 2 else 4
-  Float default_mem_gib = if max_svlen < 10000000 then 16 else 32
+  Int default_cpus = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 8 else 4 else 2
+  Float default_mem_gib = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 64 else 32 else 16
 
   runtime {
     bootDiskSizeGb: select_first([boot_disk_gb, 8])
-    cpu: select_first([default_cpus, 2])
+    cpu: select_first([cpus, default_cpus])
     disks: "local-disk " + select_first([disk_gb, 128]) + " HDD"
     docker: r_docker
     maxRetries: select_first([max_retries, 1])

@@ -124,8 +124,8 @@ task BatchVariants {
 
     mkdir batches
     mkdir mems
-    gawk -F'\t' -v n="${variants_per_batch}" -v max_svlen="${max_svlen}"'
-      BEGIN { OFS = "\t"; max_svlen = max_svlen + 0 }
+    gawk -F'\t' -v n="${variants_per_batch}" -v max_svlen="${max_svlen}" '
+      BEGIN { OFS = "\t" }
       FNR == 1 {
         for (i = 1; i <= NF; ++i) {
           if ($i == "sample") {

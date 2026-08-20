@@ -222,8 +222,8 @@ task CheckVariants {
   }
 
   Int max_svlen = read_int(max_svlen_file)
-  Int default_cpus = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 16 else 4 else 2
-  Float default_mem_gib = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 128 else 32 else 16
+  Int default_cpus = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 8 else 4 else 2
+  Float default_mem_gib = if max_svlen >= 10000000 then if max_svlen >= 50000000 then 64 else 32 else 16
 
   runtime {
     bootDiskSizeGb: select_first([boot_disk_gb, 8])

@@ -12,6 +12,7 @@ workflow VisualizeDeNovoSVs {
     #    variant ID, SV type and sample ID, in that order.
     File variants
     Int variants_per_batch = 25
+    Int? max_svlen
 
     # TSV with sample ID, sample set ID
     File sample_table
@@ -39,6 +40,7 @@ workflow VisualizeDeNovoSVs {
     input:
       variants = variants,
       variants_per_batch = variants_per_batch,
+      max_svlen = max_svlen,
       base_docker = base_docker
   }
 
@@ -62,7 +64,7 @@ workflow VisualizeDeNovoSVs {
           sample_table = sample_table,
           pedigree = pedigree,
           r_docker = r_docker,
-          max_svlen_file = BatchVariants.max_svlens[i]
+          max_svlen_file = BatchVariants.max_batch_svlens[i]
       }
     }
   }
@@ -80,12 +82,13 @@ task BatchVariants {
   input {
     File variants
     Int variants_per_batch
+    Int? max_svlen
     String base_docker
   }
 
   output {
     Array[File] batched_variants = glob("batches/*.tsv")
-    Array[File] max_svlens = glob("mems/*")
+    Array[File] max_batch_svlens = glob("mems/*")
   }
 
   Float disk_size = size(variants, "GB") * 2 + 16
@@ -107,6 +110,7 @@ task BatchVariants {
 
     variants='~{variants}'
     variants_per_batch='~{variants_per_batch}'
+    max_svlen='~{select_first([max_svlen, -1])}'
 
     cat2() {
       local magic_num
@@ -120,7 +124,7 @@ task BatchVariants {
 
     mkdir batches
     mkdir mems
-    gawk -F'\t' -v n="${variants_per_batch}" '
+    gawk -F'\t' -v n="${variants_per_batch}" -v max_svlen="${max_svlen}"'
       BEGIN { OFS = "\t" }
       FNR == 1 {
         for (i = 1; i <= NF; ++i) {
@@ -148,26 +152,27 @@ task BatchVariants {
 
         next
       }
+      max_svlen > 0 && $svlen_field > max_svlen { next }
       j % n == 0 {
         if (outpath) {
           close(outpath)
           mem_outpath = sprintf("mems/%06d", k - 1)
-          print max_svlen > mem_outpath
+          print batch_max_svlen > mem_outpath
           close(mem_outpath)
-          max_svlen = 0
+          batch_max_svlen = 0
         }
         outpath = sprintf("batches/%06d.tsv", k++)
         print header > outpath
       }
       {
         print > outpath
-        max_svlen = max_svlen >= $svlen_field ? max_svlen : $svlen_field
+        batch_max_svlen = batch_max_svlen >= $svlen_field ? batch_max_svlen : $svlen_field
         ++j
       }
       END {
         if (k > 0) {
           mem_outpath = sprintf("mems/%06d", k - 1)
-          print max_svlen > mem_outpath
+          print batch_max_svlen > mem_outpath
           close(mem_outpath)
         }
       }

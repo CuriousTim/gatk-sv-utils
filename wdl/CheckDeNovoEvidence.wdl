@@ -9,6 +9,7 @@ workflow CheckDeNovoEvidence {
     # other and there can be other columns.
     File variants
     Int variants_per_batch = 100
+    Int? max_svlen
 
     # TSV with sample ID, sample set ID
     File sample_table
@@ -36,6 +37,7 @@ workflow CheckDeNovoEvidence {
     input:
       variants = variants,
       variants_per_batch = variants_per_batch,
+      max_svlen = max_svlen,
       base_docker = base_docker
   }
 
@@ -59,7 +61,7 @@ workflow CheckDeNovoEvidence {
           sample_table = sample_table,
           pedigree = pedigree,
           r_docker = r_docker,
-          max_svlen_file = BatchVariants.max_svlens[i]
+          max_svlen_file = BatchVariants.max_batch_svlens[i]
       }
     }
   }
@@ -76,12 +78,13 @@ task BatchVariants {
   input {
     File variants
     Int variants_per_batch
+    Int? max_svlen
     String base_docker
   }
 
   output {
     Array[File] batched_variants = glob("batches/*.tsv")
-    Array[File] max_svlens = glob("mems/*")
+    Array[File] max_batch_svlens = glob("mems/*")
   }
 
   Float disk_size = size(variants, "GB") * 2 + 16
@@ -104,11 +107,12 @@ task BatchVariants {
 
     variants='~{variants}'
     variants_per_batch='~{variants_per_batch}'
+    max_svlen='~{default="Inf" max_svlen}'
 
     mv "${variants}" variants.tsv.gz
     # sort by SV length so that SVs of similar size will end up in the same VM
     duckdb ':memory:' \
-      "COPY (SELECT * FROM read_csv('variants.tsv.gz', delim = '\t') ORDER BY svlen) TO 'temp.tsv' (FORMAT CSV, DELIM '\t');"
+      "COPY (SELECT * FROM read_csv('variants.tsv.gz', delim = '\t') WHERE svlen <= '~{max_svlen}' ORDER BY svlen) TO 'temp.tsv' (FORMAT CSV, DELIM '\t');"
 
     mkdir batches
     mkdir mems
